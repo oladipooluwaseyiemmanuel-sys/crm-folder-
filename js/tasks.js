@@ -1,4 +1,8 @@
 // ========================================
+// TASKS PAGE
+// ========================================
+
+// ========================================
 // LOGIN CHECK
 // ========================================
 
@@ -11,22 +15,33 @@ if (localStorage.getItem("crmLoggedIn") !== "true") {
 // API
 // ========================================
 
-const API_URL = "http://localhost:3000/api";
+// IMPORTANT:
+// Do NOT use localhost.
+// Frontend and backend are served together.
+const API_URL = "/api";
 
 
 // ========================================
-// AUTH TOKEN
+// AUTHENTICATION
 // ========================================
 
-function getAuthHeaders() {
+function getToken() {
+    return localStorage.getItem("crmToken");
+}
 
-    const token = localStorage.getItem("crmToken");
+function getAuthHeaders(includeContentType = false) {
 
-    return {
-        "Content-Type": "application/json",
+    const token = getToken();
+
+    const headers = {
         "Authorization": `Bearer ${token}`
     };
 
+    if (includeContentType) {
+        headers["Content-Type"] = "application/json";
+    }
+
+    return headers;
 }
 
 
@@ -42,48 +57,103 @@ let tasks = [];
 // ELEMENTS
 // ========================================
 
-const taskForm = document.getElementById("taskForm");
-const taskModal = document.getElementById("taskModal");
-const addTaskButton = document.getElementById("addTaskButton");
-const closeModal = document.getElementById("closeModal");
-const taskTableBody = document.getElementById("taskTableBody");
-const searchTask = document.getElementById("searchTask");
-const filterStatus = document.getElementById("filterStatus");
-const filterPriority = document.getElementById("filterPriority");
-const taskCustomer = document.getElementById("taskCustomer");
+const taskForm =
+    document.getElementById("taskForm");
+
+const taskModal =
+    document.getElementById("taskModal");
+
+const addTaskButton =
+    document.getElementById("addTaskButton");
+
+const closeModal =
+    document.getElementById("closeModal");
+
+const cancelTask =
+    document.getElementById("cancelTask");
+
+const taskTableBody =
+    document.getElementById("taskTableBody");
+
+const searchTask =
+    document.getElementById("searchTask");
+
+const filterStatus =
+    document.getElementById("filterStatus");
+
+const filterPriority =
+    document.getElementById("filterPriority");
+
+const taskCustomer =
+    document.getElementById("taskCustomer");
+
+const logoutButton =
+    document.getElementById("logoutButton");
 
 
 // ========================================
 // USER INFORMATION
 // ========================================
 
-const savedUser = localStorage.getItem("currentUser");
+function loadUser() {
 
-if (savedUser) {
+    const savedUser =
+        localStorage.getItem("currentUser");
+
+    if (!savedUser) {
+        return;
+    }
 
     try {
 
-        const user = JSON.parse(savedUser);
+        const user =
+            JSON.parse(savedUser);
 
-        const userName = document.getElementById("userName");
+        const name =
+            user.fullName ||
+            user.name ||
+            user.username ||
+            "User";
 
-        if (userName && user.fullName) {
-            userName.textContent = user.fullName;
+        const userName =
+            document.getElementById("userName");
+
+        const userAvatar =
+            document.getElementById("userAvatar");
+
+        if (userName) {
+            userName.textContent = name;
         }
 
-        const userAvatar = document.getElementById("userAvatar");
-
-        if (userAvatar && user.fullName) {
+        if (userAvatar) {
             userAvatar.textContent =
-                user.fullName.charAt(0).toUpperCase();
+                name.charAt(0).toUpperCase();
         }
 
     } catch (error) {
 
-        console.error("Unable to load user information.");
+        console.error(
+            "Unable to load user information:",
+            error
+        );
 
     }
+}
 
+
+// ========================================
+// LOGOUT USER
+// ========================================
+
+function logoutUser() {
+
+    localStorage.removeItem("crmLoggedIn");
+    localStorage.removeItem("crmToken");
+    localStorage.removeItem("currentUser");
+
+    sessionStorage.clear();
+
+    window.location.href = "login.html";
 }
 
 
@@ -95,46 +165,55 @@ async function loadCustomers() {
 
     try {
 
-        const response = await fetch(
-            `${API_URL}/customers`,
-            {
-                headers: getAuthHeaders()
-            }
-        );
+        const response =
+            await fetch(
+                `${API_URL}/customers`,
+                {
+                    method: "GET",
+                    headers: getAuthHeaders()
+                }
+            );
+
+        if (response.status === 401) {
+
+            alert(
+                "Your login session has expired. Please login again."
+            );
+
+            logoutUser();
+            return false;
+        }
+
+        let result = {};
+
+        try {
+            result = await response.json();
+        } catch (error) {
+            result = {};
+        }
 
         if (!response.ok) {
-            throw new Error("Customer API error");
-        }
 
-        customers = await response.json();
-
-        if (taskCustomer) {
-
-            taskCustomer.innerHTML = `
-                <option value="">
-                    Select customer
-                </option>
-            `;
-
-            customers.forEach(function (customer) {
-
-                const option =
-                    document.createElement("option");
-
-                option.value = customer.id;
-
-                option.textContent = customer.name;
-
-                taskCustomer.appendChild(option);
-
-            });
+            throw new Error(
+                result.message ||
+                "Could not load customers."
+            );
 
         }
+
+        customers =
+            Array.isArray(result)
+                ? result
+                : result.customers || [];
+
+        populateCustomerDropdown();
+
+        return true;
 
     } catch (error) {
 
         console.error(
-            "Error loading customers:",
+            "LOAD CUSTOMERS ERROR:",
             error
         );
 
@@ -142,8 +221,54 @@ async function loadCustomers() {
             "Could not connect to the CRM backend."
         );
 
+        return false;
+    }
+}
+
+
+// ========================================
+// CUSTOMER DROPDOWN
+// ========================================
+
+function populateCustomerDropdown() {
+
+    if (!taskCustomer) {
+        return;
     }
 
+    taskCustomer.innerHTML = `
+        <option value="">
+            Select customer
+        </option>
+    `;
+
+    if (customers.length === 0) {
+
+        const option =
+            document.createElement("option");
+
+        option.value = "";
+        option.textContent =
+            "No customers available";
+
+        taskCustomer.appendChild(option);
+
+        return;
+    }
+
+    customers.forEach(function (customer) {
+
+        const option =
+            document.createElement("option");
+
+        option.value = customer.id;
+
+        option.textContent =
+            customer.name || "Unnamed Customer";
+
+        taskCustomer.appendChild(option);
+
+    });
 }
 
 
@@ -153,27 +278,68 @@ async function loadCustomers() {
 
 async function loadTasks() {
 
+    if (!taskTableBody) {
+        return;
+    }
+
+    taskTableBody.innerHTML = `
+        <tr>
+            <td colspan="6"
+                style="text-align:center; padding:30px;">
+                Loading tasks...
+            </td>
+        </tr>
+    `;
+
     try {
 
-        const response = await fetch(
-            `${API_URL}/tasks`,
-            {
-                headers: getAuthHeaders()
-            }
-        );
+        const response =
+            await fetch(
+                `${API_URL}/tasks`,
+                {
+                    method: "GET",
+                    headers: getAuthHeaders()
+                }
+            );
 
-        if (!response.ok) {
-            throw new Error("Task API error");
+        if (response.status === 401) {
+
+            alert(
+                "Your login session has expired. Please login again."
+            );
+
+            logoutUser();
+            return;
         }
 
-        tasks = await response.json();
+        let result = {};
+
+        try {
+            result = await response.json();
+        } catch (error) {
+            result = {};
+        }
+
+        if (!response.ok) {
+
+            throw new Error(
+                result.message ||
+                "Could not load tasks."
+            );
+
+        }
+
+        tasks =
+            Array.isArray(result)
+                ? result
+                : result.tasks || [];
 
         displayTasks();
 
     } catch (error) {
 
         console.error(
-            "Error loading tasks:",
+            "LOAD TASKS ERROR:",
             error
         );
 
@@ -185,9 +351,7 @@ async function loadTasks() {
                 </td>
             </tr>
         `;
-
     }
-
 }
 
 
@@ -197,9 +361,13 @@ async function loadTasks() {
 
 function displayTasks(list = tasks) {
 
+    if (!taskTableBody) {
+        return;
+    }
+
     taskTableBody.innerHTML = "";
 
-    if (list.length === 0) {
+    if (!list || list.length === 0) {
 
         taskTableBody.innerHTML = `
             <tr>
@@ -213,7 +381,6 @@ function displayTasks(list = tasks) {
         return;
     }
 
-
     list.forEach(function (task) {
 
         const customer =
@@ -224,19 +391,28 @@ function displayTasks(list = tasks) {
 
             });
 
-
         const customerName =
             customer
                 ? customer.name
                 : "Unknown Customer";
 
-
         const row =
             document.createElement("tr");
 
+        const completeButton =
+            task.status !== "Completed"
+                ? `
+                    <button
+                        type="button"
+                        class="edit-button"
+                        data-action="complete"
+                        data-id="${escapeHTML(task.id)}">
+                        Complete
+                    </button>
+                `
+                : "";
 
         row.innerHTML = `
-
             <td>
                 <strong>
                     ${escapeHTML(task.title)}
@@ -261,36 +437,22 @@ function displayTasks(list = tasks) {
 
             <td>
 
-                ${
-                    task.status !== "Completed"
-                    ?
-                    `
-                    <button
-                        type="button"
-                        class="edit-button"
-                        onclick="completeTask('${task.id}')">
-                        Complete
-                    </button>
-                    `
-                    :
-                    ""
-                }
+                ${completeButton}
 
                 <button
                     type="button"
                     class="delete-button"
-                    onclick="deleteTask('${task.id}')">
+                    data-action="delete"
+                    data-id="${escapeHTML(task.id)}">
                     Delete
                 </button>
 
             </td>
-
         `;
 
         taskTableBody.appendChild(row);
 
     });
-
 }
 
 
@@ -304,10 +466,11 @@ function escapeHTML(value) {
         document.createElement("div");
 
     div.textContent =
-        value || "";
+        value == null
+            ? ""
+            : String(value);
 
     return div.innerHTML;
-
 }
 
 
@@ -315,28 +478,64 @@ function escapeHTML(value) {
 // OPEN TASK MODAL
 // ========================================
 
+async function openTaskModal() {
+
+    if (!taskModal) {
+        return;
+    }
+
+    if (taskForm) {
+        taskForm.reset();
+    }
+
+    const loaded =
+        await loadCustomers();
+
+    if (!loaded) {
+        return;
+    }
+
+    const dateInput =
+        document.getElementById("taskDueDate");
+
+    if (dateInput) {
+
+        dateInput.value =
+            new Date()
+                .toISOString()
+                .split("T")[0];
+    }
+
+    taskModal.classList.add("show");
+}
+
+
+// ========================================
+// CLOSE TASK MODAL
+// ========================================
+
+function closeTaskModal() {
+
+    if (taskModal) {
+        taskModal.classList.remove("show");
+    }
+
+    if (taskForm) {
+        taskForm.reset();
+    }
+}
+
+
+// ========================================
+// ADD TASK BUTTON
+// ========================================
+
 if (addTaskButton) {
 
     addTaskButton.addEventListener(
         "click",
-        async function () {
-
-            taskForm.reset();
-
-            await loadCustomers();
-
-            document.getElementById(
-                "taskDueDate"
-            ).value =
-                new Date()
-                    .toISOString()
-                    .split("T")[0];
-
-            taskModal.classList.add("show");
-
-        }
+        openTaskModal
     );
-
 }
 
 
@@ -348,13 +547,40 @@ if (closeModal) {
 
     closeModal.addEventListener(
         "click",
-        function () {
+        closeTaskModal
+    );
+}
 
-            taskModal.classList.remove("show");
+
+// ========================================
+// CANCEL TASK
+// ========================================
+
+if (cancelTask) {
+
+    cancelTask.addEventListener(
+        "click",
+        closeTaskModal
+    );
+}
+
+
+// ========================================
+// CLOSE WHEN CLICKING OUTSIDE
+// ========================================
+
+if (taskModal) {
+
+    taskModal.addEventListener(
+        "click",
+        function (event) {
+
+            if (event.target === taskModal) {
+                closeTaskModal();
+            }
 
         }
     );
-
 }
 
 
@@ -370,49 +596,70 @@ if (taskForm) {
 
             event.preventDefault();
 
+            const titleElement =
+                document.getElementById("taskTitle");
+
+            const customerElement =
+                document.getElementById("taskCustomer");
+
+            const dueDateElement =
+                document.getElementById("taskDueDate");
+
+            const priorityElement =
+                document.getElementById("taskPriority");
+
+            const statusElement =
+                document.getElementById("taskStatus");
+
+            const descriptionElement =
+                document.getElementById("taskDescription");
+
+            if (
+                !titleElement ||
+                !customerElement ||
+                !dueDateElement ||
+                !priorityElement ||
+                !statusElement ||
+                !descriptionElement
+            ) {
+
+                alert(
+                    "Some task form fields are missing."
+                );
+
+                return;
+            }
 
             const title =
-                document.getElementById("taskTitle")
-                    .value
-                    .trim();
-
+                titleElement.value.trim();
 
             const customerId =
-                document.getElementById("taskCustomer")
-                    .value;
-
+                customerElement.value;
 
             const dueDate =
-                document.getElementById("taskDueDate")
-                    .value;
-
+                dueDateElement.value;
 
             const priority =
-                document.getElementById("taskPriority")
-                    .value;
-
+                priorityElement.value;
 
             const status =
-                document.getElementById("taskStatus")
-                    .value;
-
+                statusElement.value;
 
             const description =
-                document.getElementById("taskDescription")
-                    .value
-                    .trim();
+                descriptionElement.value.trim();
 
-
-            if (!title || !customerId || !dueDate) {
+            if (
+                !title ||
+                !customerId ||
+                !dueDate
+            ) {
 
                 alert(
                     "Please complete the required fields."
                 );
 
                 return;
-
             }
-
 
             try {
 
@@ -423,36 +670,38 @@ if (taskForm) {
                             method: "POST",
 
                             headers:
-                                getAuthHeaders(),
+                                getAuthHeaders(true),
 
-                            body: JSON.stringify({
-
-                                title: title,
-
-                                customerId:
-                                    customerId,
-
-                                dueDate:
-                                    dueDate,
-
-                                priority:
-                                    priority,
-
-                                status:
-                                    status,
-
-                                description:
-                                    description
-
-                            })
-
+                            body:
+                                JSON.stringify({
+                                    title: title,
+                                    customerId: customerId,
+                                    dueDate: dueDate,
+                                    priority: priority,
+                                    status: status,
+                                    description: description
+                                })
                         }
                     );
 
+                if (response.status === 401) {
 
-                const result =
-                    await response.json();
+                    alert(
+                        "Your login session has expired. Please login again."
+                    );
 
+                    logoutUser();
+                    return;
+                }
+
+                let result = {};
+
+                try {
+                    result =
+                        await response.json();
+                } catch (error) {
+                    result = {};
+                }
 
                 if (!response.ok) {
 
@@ -462,24 +711,15 @@ if (taskForm) {
                     );
 
                     return;
-
                 }
-
 
                 alert(
                     "Task added successfully!"
                 );
 
-
-                taskModal.classList.remove(
-                    "show"
-                );
-
-                taskForm.reset();
-
+                closeTaskModal();
 
                 await loadTasks();
-
 
             } catch (error) {
 
@@ -491,12 +731,9 @@ if (taskForm) {
                 alert(
                     "Could not connect to the CRM backend."
                 );
-
             }
-
         }
     );
-
 }
 
 
@@ -506,47 +743,70 @@ if (taskForm) {
 
 async function completeTask(id) {
 
+    if (!id) {
+        return;
+    }
+
     try {
 
         const response =
             await fetch(
-                `${API_URL}/tasks/${id}`,
+                `${API_URL}/tasks/${encodeURIComponent(id)}`,
                 {
                     method: "PUT",
 
                     headers:
-                        getAuthHeaders(),
+                        getAuthHeaders(true),
 
-                    body: JSON.stringify({
-                        status: "Completed"
-                    })
-
+                    body:
+                        JSON.stringify({
+                            status: "Completed"
+                        })
                 }
             );
 
+        if (response.status === 401) {
+
+            alert(
+                "Your login session has expired. Please login again."
+            );
+
+            logoutUser();
+            return;
+        }
+
+        let result = {};
+
+        try {
+            result =
+                await response.json();
+        } catch (error) {
+            result = {};
+        }
 
         if (!response.ok) {
 
-            throw new Error(
-                "Could not complete task"
+            alert(
+                result.message ||
+                "Could not complete task."
             );
 
+            return;
         }
-
 
         await loadTasks();
 
-
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "COMPLETE TASK ERROR:",
+            error
+        );
 
         alert(
             "Could not connect to the CRM backend."
         );
-
     }
-
 }
 
 
@@ -556,47 +816,118 @@ async function completeTask(id) {
 
 async function deleteTask(id) {
 
-    if (!confirm("Delete this task?")) {
+    if (!id) {
         return;
     }
 
+    const confirmed =
+        confirm(
+            "Are you sure you want to delete this task?"
+        );
+
+    if (!confirmed) {
+        return;
+    }
 
     try {
 
         const response =
             await fetch(
-                `${API_URL}/tasks/${id}`,
+                `${API_URL}/tasks/${encodeURIComponent(id)}`,
                 {
                     method: "DELETE",
-
-                    headers:
-                        getAuthHeaders()
+                    headers: getAuthHeaders()
                 }
             );
 
+        if (response.status === 401) {
+
+            alert(
+                "Your login session has expired. Please login again."
+            );
+
+            logoutUser();
+            return;
+        }
+
+        let result = {};
+
+        try {
+            result =
+                await response.json();
+        } catch (error) {
+            result = {};
+        }
 
         if (!response.ok) {
 
-            throw new Error(
-                "Could not delete task"
+            alert(
+                result.message ||
+                "Could not delete task."
             );
 
+            return;
         }
 
+        alert(
+            "Task deleted successfully."
+        );
 
         await loadTasks();
 
-
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "DELETE TASK ERROR:",
+            error
+        );
 
         alert(
             "Could not connect to the CRM backend."
         );
-
     }
+}
 
+
+// ========================================
+// TABLE ACTIONS
+// ========================================
+
+if (taskTableBody) {
+
+    taskTableBody.addEventListener(
+        "click",
+        function (event) {
+
+            const button =
+                event.target.closest("button");
+
+            if (!button) {
+                return;
+            }
+
+            const id =
+                button.getAttribute("data-id");
+
+            const action =
+                button.getAttribute("data-action");
+
+            if (!id) {
+                return;
+            }
+
+            if (action === "complete") {
+
+                completeTask(id);
+                return;
+            }
+
+            if (action === "delete") {
+
+                deleteTask(id);
+            }
+        }
+    );
 }
 
 
@@ -607,18 +938,21 @@ async function deleteTask(id) {
 function filterTasks() {
 
     const search =
-        searchTask.value
-            .toLowerCase()
-            .trim();
-
+        searchTask
+            ? searchTask.value
+                .toLowerCase()
+                .trim()
+            : "";
 
     const status =
-        filterStatus.value;
-
+        filterStatus
+            ? filterStatus.value
+            : "All";
 
     const priority =
-        filterPriority.value;
-
+        filterPriority
+            ? filterPriority.value
+            : "All";
 
     const filtered =
         tasks.filter(function (task) {
@@ -631,51 +965,44 @@ function filterTasks() {
 
                 });
 
-
             const customerName =
                 customer
-                    ? customer.name.toLowerCase()
+                    ? String(customer.name || "")
+                        .toLowerCase()
                     : "";
 
+            const taskTitle =
+                String(task.title || "")
+                    .toLowerCase();
+
+            const description =
+                String(task.description || "")
+                    .toLowerCase();
 
             const matchesSearch =
-
-                String(task.title)
-                    .toLowerCase()
-                    .includes(search)
-
-                ||
-
-                customerName.includes(search)
-
-                ||
-
-                String(task.description || "")
-                    .toLowerCase()
-                    .includes(search);
-
+                !search ||
+                taskTitle.includes(search) ||
+                customerName.includes(search) ||
+                description.includes(search);
 
             const matchesStatus =
                 status === "All" ||
+                !status ||
                 task.status === status;
-
 
             const matchesPriority =
                 priority === "All" ||
+                !priority ||
                 task.priority === priority;
-
 
             return (
                 matchesSearch &&
                 matchesStatus &&
                 matchesPriority
             );
-
         });
 
-
     displayTasks(filtered);
-
 }
 
 
@@ -685,7 +1012,6 @@ if (searchTask) {
         "input",
         filterTasks
     );
-
 }
 
 
@@ -695,7 +1021,6 @@ if (filterStatus) {
         "change",
         filterTasks
     );
-
 }
 
 
@@ -705,17 +1030,12 @@ if (filterPriority) {
         "change",
         filterTasks
     );
-
 }
 
 
 // ========================================
 // LOGOUT
 // ========================================
-
-const logoutButton =
-    document.getElementById("logoutButton");
-
 
 if (logoutButton) {
 
@@ -724,8 +1044,7 @@ if (logoutButton) {
         async function () {
 
             const token =
-                localStorage.getItem("crmToken");
-
+                getToken();
 
             try {
 
@@ -736,58 +1055,60 @@ if (logoutButton) {
                         {
                             method: "POST",
 
-                            headers: {
-                                "Authorization":
-                                    `Bearer ${token}`
-                            }
+                            headers:
+                                getAuthHeaders()
                         }
                     );
-
                 }
 
             } catch (error) {
 
                 console.error(
-                    "Logout error:",
+                    "Logout request failed:",
                     error
                 );
-
             }
 
-
-            localStorage.removeItem(
-                "crmLoggedIn"
-            );
-
-            localStorage.removeItem(
-                "crmToken"
-            );
-
-            localStorage.removeItem(
-                "currentUser"
-            );
-
-
-            window.location.href =
-                "login.html";
-
+            logoutUser();
         }
     );
+}
 
+
+// ========================================
+// INITIALIZE
+// ========================================
+
+async function startTasksPage() {
+
+    loadUser();
+
+    const token =
+        getToken();
+
+    if (!token) {
+
+        alert(
+            "Please login again."
+        );
+
+        logoutUser();
+        return;
+    }
+
+    const customersLoaded =
+        await loadCustomers();
+
+    if (!customersLoaded) {
+        return;
+    }
+
+    await loadTasks();
 }
 
 
 // ========================================
 // START
 // ========================================
-
-async function startTasksPage() {
-
-    await loadCustomers();
-
-    await loadTasks();
-
-}
-
 
 startTasksPage();
