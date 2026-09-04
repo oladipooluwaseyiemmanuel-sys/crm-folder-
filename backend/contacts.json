@@ -1,0 +1,28 @@
+[
+  {
+    "id": "1788412616474",
+    "customerId": "1788410853965",
+    "type": "Call",
+    "date": "2026-09-03",
+    "subject": "john",
+    "notes": "test"
+  },
+  {
+    "id": "1788490719425",
+    "customerId": "1788410853965",
+    "type": "Email",
+    "date": "2026-09-04",
+    "subject": "john",
+    "notes": "purpose",
+    "createdAt": "2026-09-04T02:58:39.426Z"
+  },
+  {
+    "id": "1788520491578",
+    "customerId": "1788492086329",
+    "type": "Call",
+    "date": "2026-09-04",
+    "subject": "john",
+    "notes": "okay",
+    "createdAt": "2026-09-04T11:14:51.579Z"
+  }
+]
