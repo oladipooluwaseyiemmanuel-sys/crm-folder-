@@ -2,447 +2,579 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Tasks - CRM</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <link rel="stylesheet" href="css/style.css">
+<title>Tasks - CRM</title>
+
+<link rel="stylesheet" href="css/style.css">
+
 </head>
+
 
 <body>
 
-    <div class="dashboard-layout">
 
-        <!-- =========================
-             SIDEBAR
-        ========================== -->
+<div class="dashboard-layout">
 
-        <aside class="sidebar">
 
-            <div class="sidebar-logo">
-                CRM
-            </div>
+<aside class="sidebar">
 
-            <p class="sidebar-title">
-                CUSTOMER MANAGEMENT
-            </p>
 
-            <ul class="sidebar-menu">
+<div class="sidebar-logo">
+CRM
+</div>
 
-                <li>
-                    <a href="dashboard.html">
-                        🏠 Dashboard
-                    </a>
-                </li>
 
-                <li>
-                    <a href="customers.html">
-                        👥 Customers
-                    </a>
-                </li>
+<p class="sidebar-title">
+CUSTOMER MANAGEMENT
+</p>
 
-                <li>
-                    <a href="contacts.html">
-                        📞 Contacts
-                    </a>
-                </li>
 
-                <li class="active">
-                    <a href="tasks.html">
-                        📋 Tasks
-                    </a>
-                </li>
+<ul class="sidebar-menu">
 
-                <li>
-                    <a href="reports.html">
-                        📊 Reports
-                    </a>
-                </li>
 
-                <li>
-                    <a href="settings.html">
-                        ⚙️ Settings
-                    </a>
-                </li>
+<li>
+<a href="dashboard.html">
+🏠 Dashboard
+</a>
+</li>
 
-            </ul>
 
+<li>
+<a href="customers.html">
+👥 Customers
+</a>
+</li>
 
-            <div class="sidebar-bottom">
 
-                <button id="logoutButton">
-                    🚪 Logout
-                </button>
+<li>
+<a href="contacts.html">
+📞 Contacts
+</a>
+</li>
 
-            </div>
 
-        </aside>
+<li class="active">
+<a href="tasks.html">
+📋 Tasks
+</a>
+</li>
 
 
-        <!-- =========================
-             MAIN CONTENT
-        ========================== -->
+<li>
+<a href="reports.html">
+📊 Reports
+</a>
+</li>
 
-        <main class="dashboard-main">
 
-            <!-- Header -->
+<li>
+<a href="settings.html">
+⚙️ Settings
+</a>
+</li>
 
-            <header class="dashboard-header">
 
-                <div>
+</ul>
 
-                    <h1>
-                        Tasks
-                    </h1>
 
-                    <p>
-                        Manage your customer follow-ups and activities
-                    </p>
+<div class="sidebar-bottom">
 
-                </div>
+<button
+id="logoutButton"
+type="button">
 
+🚪 Logout
 
-                <div class="user-info">
+</button>
 
-                    <div
-                        class="user-avatar"
-                        id="userAvatar"
-                    >
-                        U
-                    </div>
+</div>
 
-                    <div>
 
-                        <strong id="userName">
-                            User
-                        </strong>
+</aside>
 
-                        <small>
-                            CRM User
-                        </small>
 
-                    </div>
 
-                </div>
 
-            </header>
 
+<main class="dashboard-main">
 
-            <!-- =========================
-                 TASK ACTIONS
-            ========================== -->
 
-            <section class="customer-actions">
+<header class="dashboard-header">
 
-                <div>
 
-                    <h2>
-                        Task List
-                    </h2>
+<div>
 
-                    <p>
-                        Create and manage your CRM tasks.
-                    </p>
+<h1>
+Tasks
+</h1>
 
-                </div>
 
+<p>
+Manage your customer follow-ups and activities
+</p>
 
-                <button
-                    class="auth-button"
-                    id="addTaskButton"
-                >
-                    + Add Task
-                </button>
 
-            </section>
+</div>
 
 
-            <!-- =========================
-                 TASK FILTER
-            ========================== -->
 
-            <section class="task-filters">
+<div class="user-info">
 
-                <input
-                    type="text"
-                    id="searchTask"
-                    placeholder="Search tasks..."
-                >
 
+<div
+class="user-avatar"
+id="userAvatar">
 
-                <select id="filterStatus">
+U
 
-                    <option value="All">
-                        All Status
-                    </option>
+</div>
 
-                    <option value="Pending">
-                        Pending
-                    </option>
 
-                    <option value="In Progress">
-                        In Progress
-                    </option>
+<div>
 
-                    <option value="Completed">
-                        Completed
-                    </option>
+<strong id="userName">
+User
+</strong>
 
-                </select>
 
+<small>
+CRM User
+</small>
 
-                <select id="filterPriority">
 
-                    <option value="All">
-                        All Priorities
-                    </option>
+</div>
 
-                    <option value="High">
-                        High
-                    </option>
 
-                    <option value="Medium">
-                        Medium
-                    </option>
+</div>
 
-                    <option value="Low">
-                        Low
-                    </option>
 
-                </select>
+</header>
 
-            </section>
 
 
-            <!-- =========================
-                 TASK TABLE
-            ========================== -->
 
-            <section class="customer-table-container">
 
-                <table class="customer-table">
+<section class="customer-actions">
 
-                    <thead>
 
-                        <tr>
+<div>
 
-                            <th>
-                                Task
-                            </th>
+<h2>
+Task List
+</h2>
 
-                            <th>
-                                Customer
-                            </th>
 
-                            <th>
-                                Due Date
-                            </th>
+<p>
+Create and manage your CRM tasks.
+</p>
 
-                            <th>
-                                Priority
-                            </th>
 
-                            <th>
-                                Status
-                            </th>
+</div>
 
-                            <th>
-                                Actions
-                            </th>
 
-                        </tr>
 
-                    </thead>
+<button
+class="auth-button"
+id="addTaskButton"
+type="button">
 
++ Add Task
 
-                    <tbody id="taskTableBody">
+</button>
 
-                    </tbody>
 
-                </table>
+</section>
 
-            </section>
 
-        </main>
 
-    </div>
 
 
-    <!-- =========================
-         ADD TASK MODAL
-    ========================== -->
+<section class="task-filters">
 
-    <div
-        class="modal"
-        id="taskModal"
-    >
 
-        <div class="modal-content">
+<input
+type="text"
+id="searchTask"
+placeholder="Search tasks...">
 
-            <div class="modal-header">
 
-                <h2>
-                    Add Task
-                </h2>
 
-                <button
-                    type="button"
-                    id="closeModal"
-                    class="close-button"
-                >
-                    &times;
-                </button>
+<select id="filterStatus">
 
-            </div>
+<option value="All">
+All Status
+</option>
 
+<option value="Pending">
+Pending
+</option>
 
-            <form id="taskForm">
+<option value="In Progress">
+In Progress
+</option>
 
+<option value="Completed">
+Completed
+</option>
 
-                <!-- Task Title -->
 
-                <div class="form-group">
+</select>
 
-                    <label for="taskTitle">
-                        Task Title
-                    </label>
 
-                    <input
-                        type="text"
-                        id="taskTitle"
-                        placeholder="Enter task title"
-                        required
-                    >
 
-                </div>
 
+<select id="filterPriority">
 
-                <!-- Customer -->
 
-                <div class="form-group">
+<option value="All">
+All Priorities
+</option>
 
-                    <label for="taskCustomer">
-                        Customer
-                    </label>
 
-                    <select
-                        id="taskCustomer"
-                        required
-                    >
+<option value="High">
+High
+</option>
 
-                        <option value="">
-                            Select customer
-                        </option>
 
-                    </select>
+<option value="Medium">
+Medium
+</option>
 
-                </div>
 
+<option value="Low">
+Low
+</option>
 
-                <!-- Due Date -->
 
-                <div class="form-group">
+</select>
 
-                    <label for="taskDueDate">
-                        Due Date
-                    </label>
 
-                    <input
-                        type="date"
-                        id="taskDueDate"
-                        required
-                    >
+</section>
 
-                </div>
 
 
-                <!-- Priority -->
 
-                <div class="form-group">
 
-                    <label for="taskPriority">
-                        Priority
-                    </label>
+<section class="customer-table-container">
 
-                    <select id="taskPriority">
 
-                        <option value="High">
-                            High
-                        </option>
+<table class="customer-table">
 
-                        <option value="Medium" selected>
-                            Medium
-                        </option>
 
-                        <option value="Low">
-                            Low
-                        </option>
+<thead>
 
-                    </select>
 
-                </div>
+<tr>
 
+<th>
+Task
+</th>
 
-                <!-- Status -->
+<th>
+Customer
+</th>
 
-                <div class="form-group">
+<th>
+Due Date
+</th>
 
-                    <label for="taskStatus">
-                        Status
-                    </label>
+<th>
+Priority
+</th>
 
-                    <select id="taskStatus">
+<th>
+Status
+</th>
 
-                        <option value="Pending">
-                            Pending
-                        </option>
+<th>
+Actions
+</th>
 
-                        <option value="In Progress">
-                            In Progress
-                        </option>
 
-                        <option value="Completed">
-                            Completed
-                        </option>
+</tr>
 
-                    </select>
 
-                </div>
+</thead>
 
 
-                <!-- Description -->
 
-                <div class="form-group">
+<tbody id="taskTableBody">
 
-                    <label for="taskDescription">
-                        Description
-                    </label>
+</tbody>
 
-                    <textarea
-                        id="taskDescription"
-                        rows="4"
-                        placeholder="Enter task details..."
-                    ></textarea>
 
-                </div>
 
+</table>
 
-                <button
-                    type="submit"
-                    class="auth-button"
-                >
-                    Save Task
-                </button>
 
-            </form>
+</section>
 
-        </div>
 
-    </div>
+</main>
 
 
-    <script src="js/tasks.js"></script>
-<script src="js/dashboard.js"></script>
+</div>
+
+
+
+
+
+
+<!-- TASK MODAL -->
+
+
+<div
+class="modal"
+id="taskModal">
+
+
+<div class="modal-content">
+
+
+<div class="modal-header">
+
+
+<h2>
+Add Task
+</h2>
+
+
+
+<button
+
+type="button"
+
+id="closeModal"
+
+class="close-button">
+
+&times;
+
+</button>
+
+
+</div>
+
+
+
+
+
+<form id="taskForm">
+
+
+<div class="form-group">
+
+
+<label>
+Task Title
+</label>
+
+
+<input
+
+type="text"
+
+id="taskTitle"
+
+required>
+
+
+</div>
+
+
+
+
+
+<div class="form-group">
+
+
+<label>
+Customer
+</label>
+
+
+<select
+
+id="taskCustomer"
+
+required>
+
+
+<option value="">
+Select customer
+</option>
+
+
+</select>
+
+
+</div>
+
+
+
+
+
+<div class="form-group">
+
+
+<label>
+Due Date
+</label>
+
+
+<input
+
+type="date"
+
+id="taskDueDate"
+
+required>
+
+
+</div>
+
+
+
+
+
+<div class="form-group">
+
+
+<label>
+Priority
+</label>
+
+
+<select id="taskPriority">
+
+
+<option value="High">
+High
+</option>
+
+
+<option value="Medium" selected>
+Medium
+</option>
+
+
+<option value="Low">
+Low
+</option>
+
+
+</select>
+
+
+</div>
+
+
+
+
+
+<div class="form-group">
+
+
+<label>
+Status
+</label>
+
+
+<select id="taskStatus">
+
+
+<option value="Pending">
+Pending
+</option>
+
+
+<option value="In Progress">
+In Progress
+</option>
+
+
+<option value="Completed">
+Completed
+</option>
+
+
+</select>
+
+
+</div>
+
+
+
+
+
+<div class="form-group">
+
+
+<label>
+Description
+</label>
+
+
+<textarea
+
+id="taskDescription"
+
+rows="4">
+
+</textarea>
+
+
+</div>
+
+
+
+
+<button
+
+type="submit"
+
+class="auth-button">
+
+Save Task
+
+</button>
+
+
+
+<button
+
+type="button"
+
+id="cancelTask"
+
+class="close-button">
+
+Cancel
+
+</button>
+
+
+
+</form>
+
+
+
+</div>
+
+
+</div>
+
+
+
+
+
+
+<script src="js/tasks.js"></script>
+
+
 </body>
+
 </html>

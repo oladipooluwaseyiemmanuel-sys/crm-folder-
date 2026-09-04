@@ -16,9 +16,8 @@ if (localStorage.getItem("crmLoggedIn") !== "true") {
 // ========================================
 
 // IMPORTANT:
-// Do NOT use localhost.
-// Render serves the frontend and backend together.
-
+// Use the Render server's own /api path.
+// DO NOT use localhost.
 const API_URL = "/api";
 
 
@@ -32,8 +31,10 @@ function getToken() {
 
 function getAuthHeaders(includeContentType = false) {
 
+    const token = getToken();
+
     const headers = {
-        "Authorization": `Bearer ${getToken()}`
+        "Authorization": `Bearer ${token}`
     };
 
     if (includeContentType) {
@@ -56,41 +57,39 @@ let tasks = [];
 // ELEMENTS
 // ========================================
 
-const taskForm = document.getElementById("taskForm");
-const taskModal = document.getElementById("taskModal");
-const addTaskButton = document.getElementById("addTaskButton");
-const closeModal = document.getElementById("closeModal");
-const cancelTask = document.getElementById("cancelTask");
+const taskForm =
+    document.getElementById("taskForm");
 
-const taskTableBody = document.getElementById("taskTableBody");
+const taskModal =
+    document.getElementById("taskModal");
 
-const searchTask = document.getElementById("searchTask");
-const filterStatus = document.getElementById("filterStatus");
-const filterPriority = document.getElementById("filterPriority");
+const addTaskButton =
+    document.getElementById("addTaskButton");
 
-const taskCustomer = document.getElementById("taskCustomer");
+const closeModal =
+    document.getElementById("closeModal");
 
-const logoutButton = document.getElementById("logoutButton");
+const taskTableBody =
+    document.getElementById("taskTableBody");
 
+const searchTask =
+    document.getElementById("searchTask");
 
-// ========================================
-// LOGOUT USER
-// ========================================
+const filterStatus =
+    document.getElementById("filterStatus");
 
-function logoutUser() {
+const filterPriority =
+    document.getElementById("filterPriority");
 
-    localStorage.removeItem("crmLoggedIn");
-    localStorage.removeItem("crmToken");
-    localStorage.removeItem("currentUser");
+const taskCustomer =
+    document.getElementById("taskCustomer");
 
-    sessionStorage.clear();
-
-    window.location.href = "login.html";
-}
+const logoutButton =
+    document.getElementById("logoutButton");
 
 
 // ========================================
-// LOAD USER
+// USER INFORMATION
 // ========================================
 
 function loadUser() {
@@ -131,11 +130,27 @@ function loadUser() {
     } catch (error) {
 
         console.error(
-            "Unable to load user:",
+            "Could not load user:",
             error
         );
 
     }
+}
+
+
+// ========================================
+// LOGOUT USER
+// ========================================
+
+function logoutUser() {
+
+    localStorage.removeItem("crmLoggedIn");
+    localStorage.removeItem("crmToken");
+    localStorage.removeItem("currentUser");
+
+    sessionStorage.clear();
+
+    window.location.href = "login.html";
 }
 
 
@@ -156,6 +171,8 @@ async function loadCustomers() {
                 }
             );
 
+
+        // Session expired
         if (response.status === 401) {
 
             alert(
@@ -167,38 +184,97 @@ async function loadCustomers() {
             return false;
         }
 
+
         if (!response.ok) {
 
-            let result = {};
+            let errorMessage =
+                "Could not load customers.";
 
             try {
-                result = await response.json();
+
+                const errorResult =
+                    await response.json();
+
+                errorMessage =
+                    errorResult.message ||
+                    errorMessage;
+
             } catch (error) {
-                // Ignore JSON error
+                // Ignore invalid JSON
             }
 
-            throw new Error(
-                result.message ||
-                "Could not load customers."
-            );
+            throw new Error(errorMessage);
         }
+
 
         const result =
             await response.json();
 
-        customers =
-            Array.isArray(result)
-                ? result
-                : result.customers || [];
 
-        populateCustomerSelect();
+        // Support both:
+        // [customers]
+        // { customers: [...] }
+
+        if (Array.isArray(result)) {
+
+            customers = result;
+
+        } else if (
+            result &&
+            Array.isArray(result.customers)
+        ) {
+
+            customers =
+                result.customers;
+
+        } else {
+
+            customers = [];
+
+        }
+
+
+        // Fill customer dropdown
+
+        if (taskCustomer) {
+
+            taskCustomer.innerHTML = `
+                <option value="">
+                    Select customer
+                </option>
+            `;
+
+
+            customers.forEach(
+                function (customer) {
+
+                    const option =
+                        document.createElement("option");
+
+                    option.value =
+                        customer.id;
+
+                    option.textContent =
+                        customer.name ||
+                        "Unnamed Customer";
+
+                    taskCustomer.appendChild(
+                        option
+                    );
+
+                }
+            );
+
+        }
+
 
         return true;
+
 
     } catch (error) {
 
         console.error(
-            "Error loading customers:",
+            "LOAD CUSTOMERS ERROR:",
             error
         );
 
@@ -212,40 +288,6 @@ async function loadCustomers() {
 
 
 // ========================================
-// POPULATE CUSTOMER SELECT
-// ========================================
-
-function populateCustomerSelect() {
-
-    if (!taskCustomer) {
-        return;
-    }
-
-    taskCustomer.innerHTML = `
-        <option value="">
-            Select customer
-        </option>
-    `;
-
-    customers.forEach(function (customer) {
-
-        const option =
-            document.createElement("option");
-
-        option.value =
-            customer.id;
-
-        option.textContent =
-            customer.name ||
-            "Unnamed Customer";
-
-        taskCustomer.appendChild(option);
-
-    });
-}
-
-
-// ========================================
 // LOAD TASKS
 // ========================================
 
@@ -255,14 +297,18 @@ async function loadTasks() {
         return;
     }
 
+
     taskTableBody.innerHTML = `
         <tr>
-            <td colspan="6"
-                style="text-align:center; padding:30px;">
+            <td
+                colspan="6"
+                style="text-align:center; padding:30px;"
+            >
                 Loading tasks...
             </td>
         </tr>
     `;
+
 
     try {
 
@@ -275,6 +321,8 @@ async function loadTasks() {
                 }
             );
 
+
+        // Session expired
         if (response.status === 401) {
 
             alert(
@@ -286,48 +334,77 @@ async function loadTasks() {
             return;
         }
 
+
         if (!response.ok) {
 
-            let result = {};
+            let errorMessage =
+                "Could not load tasks.";
 
             try {
-                result =
+
+                const errorResult =
                     await response.json();
+
+                errorMessage =
+                    errorResult.message ||
+                    errorMessage;
+
             } catch (error) {
-                // Ignore JSON error
+                // Ignore invalid JSON
             }
 
-            throw new Error(
-                result.message ||
-                "Could not load tasks."
-            );
+            throw new Error(errorMessage);
         }
+
 
         const result =
             await response.json();
 
-        tasks =
-            Array.isArray(result)
-                ? result
-                : result.tasks || [];
 
-        displayTasks(tasks);
+        // Support both:
+        // [tasks]
+        // { tasks: [...] }
+
+        if (Array.isArray(result)) {
+
+            tasks = result;
+
+        } else if (
+            result &&
+            Array.isArray(result.tasks)
+        ) {
+
+            tasks =
+                result.tasks;
+
+        } else {
+
+            tasks = [];
+
+        }
+
+
+        displayTasks();
+
 
     } catch (error) {
 
         console.error(
-            "Error loading tasks:",
+            "LOAD TASKS ERROR:",
             error
         );
 
         taskTableBody.innerHTML = `
             <tr>
-                <td colspan="6"
-                    style="text-align:center; padding:30px;">
+                <td
+                    colspan="6"
+                    style="text-align:center; padding:30px;"
+                >
                     Could not load tasks.
                 </td>
             </tr>
         `;
+
     }
 }
 
@@ -342,14 +419,18 @@ function displayTasks(list = tasks) {
         return;
     }
 
+
     taskTableBody.innerHTML = "";
+
 
     if (!list || list.length === 0) {
 
         taskTableBody.innerHTML = `
             <tr>
-                <td colspan="6"
-                    style="text-align:center; padding:30px;">
+                <td
+                    colspan="6"
+                    style="text-align:center; padding:30px;"
+                >
                     No tasks found.
                 </td>
             </tr>
@@ -358,77 +439,92 @@ function displayTasks(list = tasks) {
         return;
     }
 
-    list.forEach(function (task) {
 
-        const customer =
-            customers.find(function (item) {
+    list.forEach(
+        function (task) {
 
-                return String(item.id) ===
-                    String(task.customerId);
+            const customer =
+                customers.find(
+                    function (item) {
 
-            });
+                        return String(item.id) ===
+                            String(task.customerId);
 
-        const customerName =
-            customer
-                ? customer.name
-                : "Unknown Customer";
+                    }
+                );
 
-        const row =
-            document.createElement("tr");
 
-        row.innerHTML = `
-            <td>
-                <strong>
-                    ${escapeHTML(task.title)}
-                </strong>
-            </td>
+            const customerName =
+                customer
+                    ? customer.name
+                    : "Unknown Customer";
 
-            <td>
-                ${escapeHTML(customerName)}
-            </td>
 
-            <td>
-                ${escapeHTML(task.dueDate)}
-            </td>
+            const row =
+                document.createElement("tr");
 
-            <td>
-                ${escapeHTML(task.priority)}
-            </td>
 
-            <td>
-                ${escapeHTML(task.status)}
-            </td>
+            row.innerHTML = `
 
-            <td>
+                <td>
+                    <strong>
+                        ${escapeHTML(task.title)}
+                    </strong>
+                </td>
 
-                ${
-                    task.status !== "Completed"
-                    ?
-                    `
+                <td>
+                    ${escapeHTML(customerName)}
+                </td>
+
+                <td>
+                    ${escapeHTML(task.dueDate)}
+                </td>
+
+                <td>
+                    ${escapeHTML(task.priority)}
+                </td>
+
+                <td>
+                    ${escapeHTML(task.status)}
+                </td>
+
+                <td>
+
+                    ${
+                        task.status !== "Completed"
+                        ?
+                        `
+                        <button
+                            type="button"
+                            class="edit-button"
+                            data-action="complete"
+                            data-id="${escapeHTML(task.id)}"
+                        >
+                            Complete
+                        </button>
+                        `
+                        :
+                        ""
+                    }
+
                     <button
                         type="button"
-                        class="edit-button complete-button"
-                        data-id="${escapeHTML(task.id)}">
-                        Complete
+                        class="delete-button"
+                        data-action="delete"
+                        data-id="${escapeHTML(task.id)}"
+                    >
+                        Delete
                     </button>
-                    `
-                    :
-                    ""
-                }
 
-                <button
-                    type="button"
-                    class="delete-button"
-                    data-id="${escapeHTML(task.id)}">
-                    Delete
-                </button>
+                </td>
 
-            </td>
-        `;
+            `;
 
-        taskTableBody.appendChild(row);
 
-    });
+            taskTableBody.appendChild(row);
+
+        }
+    );
 }
 
 
@@ -451,7 +547,7 @@ function escapeHTML(value) {
 
 
 // ========================================
-// OPEN MODAL
+// OPEN TASK MODAL
 // ========================================
 
 if (addTaskButton) {
@@ -464,17 +560,21 @@ if (addTaskButton) {
                 taskForm.reset();
             }
 
+
             const loaded =
                 await loadCustomers();
+
 
             if (!loaded) {
                 return;
             }
 
+
             const dateInput =
                 document.getElementById(
                     "taskDueDate"
                 );
+
 
             if (dateInput) {
 
@@ -485,28 +585,39 @@ if (addTaskButton) {
 
             }
 
+
             if (taskModal) {
-                taskModal.classList.add("show");
+
+                taskModal.classList.add(
+                    "show"
+                );
+
             }
 
         }
     );
+
 }
 
 
 // ========================================
-// CLOSE MODAL
+// CLOSE TASK MODAL
 // ========================================
 
 function closeTaskModal() {
 
     if (taskModal) {
-        taskModal.classList.remove("show");
+
+        taskModal.classList.remove(
+            "show"
+        );
+
     }
 
     if (taskForm) {
         taskForm.reset();
     }
+
 }
 
 
@@ -516,15 +627,7 @@ if (closeModal) {
         "click",
         closeTaskModal
     );
-}
 
-
-if (cancelTask) {
-
-    cancelTask.addEventListener(
-        "click",
-        closeTaskModal
-    );
 }
 
 
@@ -534,12 +637,17 @@ if (taskModal) {
         "click",
         function (event) {
 
-            if (event.target === taskModal) {
+            if (
+                event.target === taskModal
+            ) {
+
                 closeTaskModal();
+
             }
 
         }
     );
+
 }
 
 
@@ -555,25 +663,37 @@ if (taskForm) {
 
             event.preventDefault();
 
+
             const titleElement =
-                document.getElementById("taskTitle");
+                document.getElementById(
+                    "taskTitle"
+                );
 
             const customerElement =
-                document.getElementById("taskCustomer");
+                document.getElementById(
+                    "taskCustomer"
+                );
 
             const dueDateElement =
-                document.getElementById("taskDueDate");
+                document.getElementById(
+                    "taskDueDate"
+                );
 
             const priorityElement =
-                document.getElementById("taskPriority");
+                document.getElementById(
+                    "taskPriority"
+                );
 
             const statusElement =
-                document.getElementById("taskStatus");
+                document.getElementById(
+                    "taskStatus"
+                );
 
             const descriptionElement =
                 document.getElementById(
                     "taskDescription"
                 );
+
 
             if (
                 !titleElement ||
@@ -590,6 +710,7 @@ if (taskForm) {
 
                 return;
             }
+
 
             const title =
                 titleElement.value.trim();
@@ -609,6 +730,7 @@ if (taskForm) {
             const description =
                 descriptionElement.value.trim();
 
+
             if (
                 !title ||
                 !customerId ||
@@ -621,6 +743,7 @@ if (taskForm) {
 
                 return;
             }
+
 
             try {
 
@@ -635,15 +758,29 @@ if (taskForm) {
 
                             body:
                                 JSON.stringify({
-                                    title,
-                                    customerId,
-                                    dueDate,
-                                    priority,
-                                    status,
-                                    description
+
+                                    title:
+                                        title,
+
+                                    customerId:
+                                        customerId,
+
+                                    dueDate:
+                                        dueDate,
+
+                                    priority:
+                                        priority,
+
+                                    status:
+                                        status,
+
+                                    description:
+                                        description
+
                                 })
                         }
                     );
+
 
                 if (response.status === 401) {
 
@@ -656,6 +793,7 @@ if (taskForm) {
                     return;
                 }
 
+
                 let result = {};
 
                 try {
@@ -664,8 +802,9 @@ if (taskForm) {
                         await response.json();
 
                 } catch (error) {
-                    // Ignore JSON error
+                    // Ignore invalid JSON
                 }
+
 
                 if (!response.ok) {
 
@@ -677,11 +816,14 @@ if (taskForm) {
                     return;
                 }
 
+
                 alert(
                     "Task added successfully!"
                 );
 
+
                 closeTaskModal();
+
 
                 await loadTasks();
 
@@ -700,6 +842,7 @@ if (taskForm) {
 
         }
     );
+
 }
 
 
@@ -712,6 +855,7 @@ async function completeTask(id) {
     if (!id) {
         return;
     }
+
 
     try {
 
@@ -731,6 +875,7 @@ async function completeTask(id) {
                 }
             );
 
+
         if (response.status === 401) {
 
             alert(
@@ -742,16 +887,17 @@ async function completeTask(id) {
             return;
         }
 
-        let result = {};
-
-        try {
-            result =
-                await response.json();
-        } catch (error) {
-            // Ignore JSON error
-        }
 
         if (!response.ok) {
+
+            let result = {};
+
+            try {
+                result =
+                    await response.json();
+            } catch (error) {
+                // Ignore invalid JSON
+            }
 
             alert(
                 result.message ||
@@ -761,23 +907,23 @@ async function completeTask(id) {
             return;
         }
 
-        alert(
-            "Task completed successfully!"
-        );
 
         await loadTasks();
+
 
     } catch (error) {
 
         console.error(
-            "Error completing task:",
+            "COMPLETE TASK ERROR:",
             error
         );
 
         alert(
             "Could not connect to the CRM backend."
         );
+
     }
+
 }
 
 
@@ -791,14 +937,11 @@ async function deleteTask(id) {
         return;
     }
 
-    const confirmed =
-        confirm(
-            "Are you sure you want to delete this task?"
-        );
 
-    if (!confirmed) {
+    if (!confirm("Delete this task?")) {
         return;
     }
+
 
     try {
 
@@ -811,6 +954,7 @@ async function deleteTask(id) {
                 }
             );
 
+
         if (response.status === 401) {
 
             alert(
@@ -822,16 +966,17 @@ async function deleteTask(id) {
             return;
         }
 
-        let result = {};
-
-        try {
-            result =
-                await response.json();
-        } catch (error) {
-            // Ignore JSON error
-        }
 
         if (!response.ok) {
+
+            let result = {};
+
+            try {
+                result =
+                    await response.json();
+            } catch (error) {
+                // Ignore invalid JSON
+            }
 
             alert(
                 result.message ||
@@ -841,28 +986,33 @@ async function deleteTask(id) {
             return;
         }
 
+
         alert(
             "Task deleted successfully."
         );
 
+
         await loadTasks();
+
 
     } catch (error) {
 
         console.error(
-            "Error deleting task:",
+            "DELETE TASK ERROR:",
             error
         );
 
         alert(
             "Could not connect to the CRM backend."
         );
+
     }
+
 }
 
 
 // ========================================
-// TABLE BUTTONS
+// TABLE ACTIONS
 // ========================================
 
 if (taskTableBody) {
@@ -878,29 +1028,29 @@ if (taskTableBody) {
                 return;
             }
 
+
             const id =
                 button.getAttribute("data-id");
+
+            const action =
+                button.getAttribute(
+                    "data-action"
+                );
+
 
             if (!id) {
                 return;
             }
 
-            if (
-                button.classList.contains(
-                    "complete-button"
-                )
-            ) {
+
+            if (action === "complete") {
 
                 completeTask(id);
 
-                return;
             }
 
-            if (
-                button.classList.contains(
-                    "delete-button"
-                )
-            ) {
+
+            if (action === "delete") {
 
                 deleteTask(id);
 
@@ -908,91 +1058,100 @@ if (taskTableBody) {
 
         }
     );
+
 }
 
 
 // ========================================
-// SEARCH + FILTER
+// SEARCH AND FILTER
 // ========================================
 
 function filterTasks() {
 
-    if (!searchTask ||
-        !filterStatus ||
-        !filterPriority) {
-
+    if (!searchTask) {
         return;
     }
+
 
     const search =
         searchTask.value
             .toLowerCase()
             .trim();
 
+
     const status =
-        filterStatus.value;
+        filterStatus
+            ? filterStatus.value
+            : "All";
+
 
     const priority =
-        filterPriority.value;
+        filterPriority
+            ? filterPriority.value
+            : "All";
+
 
     const filtered =
-        tasks.filter(function (task) {
+        tasks.filter(
+            function (task) {
 
-            const customer =
-                customers.find(function (item) {
+                const customer =
+                    customers.find(
+                        function (item) {
 
-                    return String(item.id) ===
-                        String(task.customerId);
+                            return String(item.id) ===
+                                String(task.customerId);
 
-                });
+                        }
+                    );
 
-            const customerName =
-                customer
-                    ? String(customer.name || "")
+
+                const customerName =
+                    customer
+                        ? String(customer.name || "")
+                            .toLowerCase()
+                        : "";
+
+
+                const matchesSearch =
+
+                    String(task.title || "")
                         .toLowerCase()
-                    : "";
+                        .includes(search)
 
-            const matchesSearch =
+                    ||
 
-                String(task.title || "")
-                    .toLowerCase()
-                    .includes(search)
+                    customerName.includes(search)
 
-                ||
+                    ||
 
-                customerName.includes(search)
+                    String(task.description || "")
+                        .toLowerCase()
+                        .includes(search);
 
-                ||
 
-                String(task.description || "")
-                    .toLowerCase()
-                    .includes(search)
+                const matchesStatus =
+                    status === "All" ||
+                    task.status === status;
 
-                ||
 
-                String(task.dueDate || "")
-                    .toLowerCase()
-                    .includes(search);
+                const matchesPriority =
+                    priority === "All" ||
+                    task.priority === priority;
 
-            const matchesStatus =
-                status === "All" ||
-                status === "" ||
-                task.status === status;
 
-            const matchesPriority =
-                priority === "All" ||
-                priority === "" ||
-                task.priority === priority;
+                return (
+                    matchesSearch &&
+                    matchesStatus &&
+                    matchesPriority
+                );
 
-            return (
-                matchesSearch &&
-                matchesStatus &&
-                matchesPriority
-            );
+            }
+        );
 
-        });
 
     displayTasks(filtered);
+
 }
 
 
@@ -1039,6 +1198,7 @@ if (logoutButton) {
             const token =
                 getToken();
 
+
             try {
 
                 if (token) {
@@ -1058,11 +1218,12 @@ if (logoutButton) {
             } catch (error) {
 
                 console.error(
-                    "Logout request failed:",
+                    "LOGOUT ERROR:",
                     error
                 );
 
             }
+
 
             logoutUser();
 
@@ -1073,15 +1234,17 @@ if (logoutButton) {
 
 
 // ========================================
-// INITIALIZE
+// START TASKS PAGE
 // ========================================
 
 async function startTasksPage() {
 
     loadUser();
 
+
     const token =
         getToken();
+
 
     if (!token) {
 
@@ -1094,14 +1257,18 @@ async function startTasksPage() {
         return;
     }
 
+
     const customersLoaded =
         await loadCustomers();
+
 
     if (!customersLoaded) {
         return;
     }
 
+
     await loadTasks();
+
 }
 
 
