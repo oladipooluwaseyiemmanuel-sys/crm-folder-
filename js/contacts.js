@@ -1,4 +1,8 @@
 // ========================================
+// CONTACTS PAGE
+// ========================================
+
+// ========================================
 // LOGIN CHECK
 // ========================================
 
@@ -6,18 +10,34 @@ if (localStorage.getItem("crmLoggedIn") !== "true") {
     window.location.href = "login.html";
 }
 
-
 // ========================================
 // API
 // ========================================
 
-const API_URL = "http://localhost:3000/api";
+// IMPORTANT:
+// Do NOT use localhost here.
+// Render serves the frontend and backend together.
+const API_URL = "/api";
 
-const TOKEN = localStorage.getItem("crmToken");
 
-if (!TOKEN) {
-    alert("Please login again.");
-    window.location.href = "login.html";
+// ========================================
+// TOKEN
+// ========================================
+
+function getToken() {
+    return localStorage.getItem("crmToken");
+}
+
+function getAuthHeaders(includeContentType = false) {
+    const headers = {
+        "Authorization": `Bearer ${getToken()}`
+    };
+
+    if (includeContentType) {
+        headers["Content-Type"] = "application/json";
+    }
+
+    return headers;
 }
 
 
@@ -33,33 +53,39 @@ let contacts = [];
 // USER INFORMATION
 // ========================================
 
-const savedUser = localStorage.getItem("currentUser");
+function loadUser() {
+    const savedUser = localStorage.getItem("currentUser");
 
-if (savedUser) {
+    if (!savedUser) {
+        return;
+    }
 
     try {
-
         const user = JSON.parse(savedUser);
+
+        const name =
+            user.fullName ||
+            user.name ||
+            user.username ||
+            "User";
 
         const userName =
             document.getElementById("userName");
 
-        if (userName && user.fullName) {
-            userName.textContent = user.fullName;
-        }
-
         const userAvatar =
             document.getElementById("userAvatar");
 
-        if (userAvatar && user.fullName) {
+        if (userName) {
+            userName.textContent = name;
+        }
+
+        if (userAvatar) {
             userAvatar.textContent =
-                user.fullName.charAt(0).toUpperCase();
+                name.charAt(0).toUpperCase();
         }
 
     } catch (error) {
-
-        console.error("Unable to load user.");
-
+        console.error("Unable to load user:", error);
     }
 }
 
@@ -80,6 +106,9 @@ const addContactButton =
 const closeModal =
     document.getElementById("closeModal");
 
+const cancelContact =
+    document.getElementById("cancelContact");
+
 const contactTableBody =
     document.getElementById("contactTableBody");
 
@@ -88,6 +117,25 @@ const searchContact =
 
 const contactCustomer =
     document.getElementById("contactCustomer");
+
+const logoutButton =
+    document.getElementById("logoutButton");
+
+
+// ========================================
+// LOGOUT / SESSION EXPIRED
+// ========================================
+
+function logoutUser() {
+
+    localStorage.removeItem("crmToken");
+    localStorage.removeItem("crmLoggedIn");
+    localStorage.removeItem("currentUser");
+
+    sessionStorage.clear();
+
+    window.location.href = "login.html";
+}
 
 
 // ========================================
@@ -98,70 +146,85 @@ async function loadCustomers() {
 
     try {
 
-        const response =
-            await fetch(`${API_URL}/customers`, {
+        const response = await fetch(
+            `${API_URL}/customers`,
+            {
+                method: "GET",
+                headers: getAuthHeaders()
+            }
+        );
 
-                headers: {
-                    "Authorization": `Bearer ${TOKEN}`
-                }
+        if (response.status === 401) {
 
-            });
+            alert(
+                "Your login session has expired. Please login again."
+            );
 
+            logoutUser();
+            return false;
+        }
 
         if (!response.ok) {
 
-            if (response.status === 401) {
+            let result = {};
 
-                localStorage.removeItem("crmToken");
-                localStorage.removeItem("crmLoggedIn");
-                localStorage.removeItem("currentUser");
-
-                alert("Your login session has expired. Please login again.");
-
-                window.location.href = "login.html";
-
-                return;
+            try {
+                result = await response.json();
+            } catch (error) {
+                // Ignore JSON parsing error
             }
 
-            throw new Error("Could not load customers");
-
+            throw new Error(
+                result.message ||
+                "Could not load customers."
+            );
         }
 
+        const result =
+            await response.json();
 
-        customers = await response.json();
+        customers =
+            Array.isArray(result)
+                ? result
+                : result.customers || [];
 
+        if (contactCustomer) {
 
-        contactCustomer.innerHTML = `
-            <option value="">
-                Select customer
-            </option>
-        `;
+            contactCustomer.innerHTML = `
+                <option value="">
+                    Select customer
+                </option>
+            `;
 
+            customers.forEach(function (customer) {
 
-        customers.forEach(function (customer) {
+                const option =
+                    document.createElement("option");
 
-            const option =
-                document.createElement("option");
+                option.value = customer.id;
 
-            option.value = customer.id;
+                option.textContent =
+                    customer.name || "Unnamed Customer";
 
-            option.textContent = customer.name;
+                contactCustomer.appendChild(option);
+            });
+        }
 
-            contactCustomer.appendChild(option);
-
-        });
-
+        return true;
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Error loading customers:",
+            error
+        );
 
         alert(
             "Could not connect to the CRM backend."
         );
 
+        return false;
     }
-
 }
 
 
@@ -171,46 +234,71 @@ async function loadCustomers() {
 
 async function loadContacts() {
 
+    if (!contactTableBody) {
+        return;
+    }
+
+    contactTableBody.innerHTML = `
+        <tr>
+            <td colspan="6"
+                style="text-align:center; padding:30px;">
+                Loading contacts...
+            </td>
+        </tr>
+    `;
+
     try {
 
-        const response =
-            await fetch(`${API_URL}/contacts`, {
+        const response = await fetch(
+            `${API_URL}/contacts`,
+            {
+                method: "GET",
+                headers: getAuthHeaders()
+            }
+        );
 
-                headers: {
-                    "Authorization": `Bearer ${TOKEN}`
-                }
+        if (response.status === 401) {
 
-            });
+            alert(
+                "Your login session has expired. Please login again."
+            );
 
+            logoutUser();
+            return;
+        }
 
         if (!response.ok) {
 
-            if (response.status === 401) {
+            let result = {};
 
-                localStorage.removeItem("crmToken");
-                localStorage.removeItem("crmLoggedIn");
-                localStorage.removeItem("currentUser");
-
-                alert("Your login session has expired. Please login again.");
-
-                window.location.href = "login.html";
-
-                return;
+            try {
+                result = await response.json();
+            } catch (error) {
+                // Ignore JSON parsing error
             }
 
-            throw new Error("Could not load contacts");
-
+            throw new Error(
+                result.message ||
+                "Could not load contacts."
+            );
         }
 
+        const result =
+            await response.json();
 
-        contacts = await response.json();
+        contacts =
+            Array.isArray(result)
+                ? result
+                : result.contacts || [];
 
         displayContacts();
 
-
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Error loading contacts:",
+            error
+        );
 
         contactTableBody.innerHTML = `
             <tr>
@@ -220,9 +308,7 @@ async function loadContacts() {
                 </td>
             </tr>
         `;
-
     }
-
 }
 
 
@@ -232,10 +318,13 @@ async function loadContacts() {
 
 function displayContacts(list = contacts) {
 
+    if (!contactTableBody) {
+        return;
+    }
+
     contactTableBody.innerHTML = "";
 
-
-    if (list.length === 0) {
+    if (!list || list.length === 0) {
 
         contactTableBody.innerHTML = `
             <tr>
@@ -249,7 +338,6 @@ function displayContacts(list = contacts) {
         return;
     }
 
-
     list.forEach(function (contact) {
 
         const customer =
@@ -260,19 +348,15 @@ function displayContacts(list = contacts) {
 
             });
 
-
         const customerName =
             customer
                 ? customer.name
                 : "Unknown Customer";
 
-
         const row =
             document.createElement("tr");
 
-
         row.innerHTML = `
-
             <td>
                 ${escapeHTML(customerName)}
             </td>
@@ -298,19 +382,15 @@ function displayContacts(list = contacts) {
                 <button
                     type="button"
                     class="delete-button"
-                    onclick="deleteContact('${contact.id}')">
+                    data-id="${escapeHTML(contact.id)}">
                     Delete
                 </button>
 
             </td>
-
         `;
 
-
         contactTableBody.appendChild(row);
-
     });
-
 }
 
 
@@ -324,10 +404,11 @@ function escapeHTML(value) {
         document.createElement("div");
 
     div.textContent =
-        value || "";
+        value == null
+            ? ""
+            : String(value);
 
     return div.innerHTML;
-
 }
 
 
@@ -335,127 +416,181 @@ function escapeHTML(value) {
 // OPEN MODAL
 // ========================================
 
-addContactButton.addEventListener(
-    "click",
-    async function () {
+if (addContactButton) {
 
-        contactForm.reset();
+    addContactButton.addEventListener(
+        "click",
+        async function () {
 
-        await loadCustomers();
+            if (contactForm) {
+                contactForm.reset();
+            }
 
+            const loaded =
+                await loadCustomers();
 
-        document.getElementById("contactDate").value =
-            new Date().toISOString().split("T")[0];
+            if (!loaded) {
+                return;
+            }
 
+            const dateInput =
+                document.getElementById("contactDate");
 
-        contactModal.classList.add("show");
+            if (dateInput) {
 
-    }
-);
+                dateInput.value =
+                    new Date()
+                        .toISOString()
+                        .split("T")[0];
+            }
+
+            if (contactModal) {
+                contactModal.classList.add("show");
+            }
+        }
+    );
+}
 
 
 // ========================================
 // CLOSE MODAL
 // ========================================
 
-closeModal.addEventListener(
-    "click",
-    function () {
+function closeContactModal() {
 
+    if (contactModal) {
         contactModal.classList.remove("show");
-
     }
-);
+
+    if (contactForm) {
+        contactForm.reset();
+    }
+}
+
+
+if (closeModal) {
+
+    closeModal.addEventListener(
+        "click",
+        closeContactModal
+    );
+}
+
+
+if (cancelContact) {
+
+    cancelContact.addEventListener(
+        "click",
+        closeContactModal
+    );
+}
+
+
+if (contactModal) {
+
+    contactModal.addEventListener(
+        "click",
+        function (event) {
+
+            if (event.target === contactModal) {
+                closeContactModal();
+            }
+        }
+    );
+}
 
 
 // ========================================
 // SAVE CONTACT
 // ========================================
 
-contactForm.addEventListener(
-    "submit",
-    async function (event) {
+if (contactForm) {
 
-        event.preventDefault();
+    contactForm.addEventListener(
+        "submit",
+        async function (event) {
 
+            event.preventDefault();
 
-        const customerId =
-            contactCustomer.value;
+            const customerElement =
+                document.getElementById("contactCustomer");
 
-        const type =
-            document.getElementById("contactType").value;
+            const typeElement =
+                document.getElementById("contactType");
 
-        const date =
-            document.getElementById("contactDate").value;
+            const dateElement =
+                document.getElementById("contactDate");
 
-        const subject =
-            document.getElementById("contactSubject")
-                .value
-                .trim();
+            const subjectElement =
+                document.getElementById("contactSubject");
 
-        const notes =
-            document.getElementById("contactNotes")
-                .value
-                .trim();
+            const notesElement =
+                document.getElementById("contactNotes");
 
+            if (
+                !customerElement ||
+                !typeElement ||
+                !dateElement ||
+                !subjectElement ||
+                !notesElement
+            ) {
 
-        if (!customerId || !type || !date || !subject) {
-
-            alert(
-                "Please complete the required fields."
-            );
-
-            return;
-        }
-
-
-        try {
-
-            const response =
-                await fetch(
-                    `${API_URL}/contacts`,
-                    {
-
-                        method: "POST",
-
-                        headers: {
-
-                            "Content-Type":
-                                "application/json",
-
-                            "Authorization":
-                                `Bearer ${TOKEN}`
-
-                        },
-
-                        body: JSON.stringify({
-
-                            customerId:
-                                customerId,
-
-                            type:
-                                type,
-
-                            date:
-                                date,
-
-                            subject:
-                                subject,
-
-                            notes:
-                                notes
-
-                        })
-
-                    }
+                alert(
+                    "Some contact form fields are missing."
                 );
 
+                return;
+            }
 
-            const result =
-                await response.json();
+            const customerId =
+                customerElement.value;
 
+            const type =
+                typeElement.value;
 
-            if (!response.ok) {
+            const date =
+                dateElement.value;
+
+            const subject =
+                subjectElement.value.trim();
+
+            const notes =
+                notesElement.value.trim();
+
+            if (
+                !customerId ||
+                !type ||
+                !date ||
+                !subject
+            ) {
+
+                alert(
+                    "Please complete the required fields."
+                );
+
+                return;
+            }
+
+            try {
+
+                const response =
+                    await fetch(
+                        `${API_URL}/contacts`,
+                        {
+                            method: "POST",
+
+                            headers:
+                                getAuthHeaders(true),
+
+                            body: JSON.stringify({
+                                customerId: customerId,
+                                type: type,
+                                date: date,
+                                subject: subject,
+                                notes: notes
+                            })
+                        }
+                    );
 
                 if (response.status === 401) {
 
@@ -463,52 +598,51 @@ contactForm.addEventListener(
                         "Your login session has expired. Please login again."
                     );
 
-                    localStorage.removeItem("crmToken");
-                    localStorage.removeItem("crmLoggedIn");
-                    localStorage.removeItem("currentUser");
+                    logoutUser();
+                    return;
+                }
 
-                    window.location.href =
-                        "login.html";
+                let result = {};
+
+                try {
+                    result =
+                        await response.json();
+                } catch (error) {
+                    // Ignore invalid JSON
+                }
+
+                if (!response.ok) {
+
+                    alert(
+                        result.message ||
+                        "Unable to save contact."
+                    );
 
                     return;
                 }
 
-
                 alert(
-                    result.message ||
-                    "Unable to save contact."
+                    "Contact added successfully!"
                 );
 
-                return;
+                closeContactModal();
 
+                await loadContacts();
+
+            } catch (error) {
+
+                console.error(
+                    "Error saving contact:",
+                    error
+                );
+
+                alert(
+                    "Could not connect to the CRM backend."
+                );
             }
-
-
-            alert(
-                "Contact added successfully!"
-            );
-
-
-            contactModal.classList.remove("show");
-
-            contactForm.reset();
-
-
-            await loadContacts();
-
-
-        } catch (error) {
-
-            console.error(error);
-
-            alert(
-                "Could not connect to the CRM backend."
-            );
-
         }
-
-    }
-);
+    );
+}
 
 
 // ========================================
@@ -517,145 +651,190 @@ contactForm.addEventListener(
 
 async function deleteContact(id) {
 
-    if (!confirm("Delete this contact record?")) {
+    if (!id) {
         return;
     }
 
+    const confirmed =
+        confirm(
+            "Delete this contact record?"
+        );
+
+    if (!confirmed) {
+        return;
+    }
 
     try {
 
         const response =
             await fetch(
-                `${API_URL}/contacts/${id}`,
+                `${API_URL}/contacts/${encodeURIComponent(id)}`,
                 {
-
                     method: "DELETE",
-
-                    headers: {
-
-                        "Authorization":
-                            `Bearer ${TOKEN}`
-
-                    }
-
+                    headers: getAuthHeaders()
                 }
             );
 
+        if (response.status === 401) {
+
+            alert(
+                "Your login session has expired. Please login again."
+            );
+
+            logoutUser();
+            return;
+        }
+
+        let result = {};
+
+        try {
+            result =
+                await response.json();
+        } catch (error) {
+            // Ignore invalid JSON
+        }
 
         if (!response.ok) {
 
-            if (response.status === 401) {
-
-                localStorage.removeItem("crmToken");
-                localStorage.removeItem("crmLoggedIn");
-                localStorage.removeItem("currentUser");
-
-                alert(
-                    "Your login session has expired. Please login again."
-                );
-
-                window.location.href =
-                    "login.html";
-
-                return;
-            }
-
-
-            throw new Error(
-                "Could not delete contact"
+            alert(
+                result.message ||
+                "Could not delete contact."
             );
 
+            return;
         }
 
+        alert(
+            "Contact deleted successfully."
+        );
 
         await loadContacts();
 
-
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "Error deleting contact:",
+            error
+        );
 
         alert(
             "Could not connect to the CRM backend."
         );
-
     }
-
 }
 
 
 // ========================================
-// SEARCH
+// TABLE DELETE BUTTON
 // ========================================
 
-searchContact.addEventListener(
-    "input",
-    function () {
+if (contactTableBody) {
 
-        const search =
-            searchContact.value
-                .toLowerCase()
-                .trim();
+    contactTableBody.addEventListener(
+        "click",
+        function (event) {
 
-
-        const filtered =
-            contacts.filter(function (contact) {
-
-                const customer =
-                    customers.find(function (item) {
-
-                        return String(item.id) ===
-                            String(contact.customerId);
-
-                    });
-
-
-                const customerName =
-                    customer
-                        ? customer.name.toLowerCase()
-                        : "";
-
-
-                return (
-
-                    customerName.includes(search)
-
-                    ||
-
-                    String(contact.type)
-                        .toLowerCase()
-                        .includes(search)
-
-                    ||
-
-                    String(contact.subject)
-                        .toLowerCase()
-                        .includes(search)
-
-                    ||
-
-                    String(contact.notes || "")
-                        .toLowerCase()
-                        .includes(search)
-
+            const button =
+                event.target.closest(
+                    ".delete-button"
                 );
 
-            });
+            if (!button) {
+                return;
+            }
+
+            const id =
+                button.getAttribute("data-id");
+
+            if (id) {
+                deleteContact(id);
+            }
+        }
+    );
+}
 
 
-        displayContacts(filtered);
+// ========================================
+// SEARCH CONTACTS
+// ========================================
 
-    }
-);
+if (searchContact) {
+
+    searchContact.addEventListener(
+        "input",
+        function () {
+
+            const search =
+                this.value
+                    .toLowerCase()
+                    .trim();
+
+            if (!search) {
+
+                displayContacts(contacts);
+
+                return;
+            }
+
+            const filtered =
+                contacts.filter(
+                    function (contact) {
+
+                        const customer =
+                            customers.find(
+                                function (item) {
+
+                                    return String(item.id) ===
+                                        String(contact.customerId);
+                                }
+                            );
+
+                        const customerName =
+                            customer
+                                ? String(customer.name || "")
+                                    .toLowerCase()
+                                : "";
+
+                        return (
+
+                            customerName.includes(search)
+
+                            ||
+
+                            String(contact.type || "")
+                                .toLowerCase()
+                                .includes(search)
+
+                            ||
+
+                            String(contact.date || "")
+                                .toLowerCase()
+                                .includes(search)
+
+                            ||
+
+                            String(contact.subject || "")
+                                .toLowerCase()
+                                .includes(search)
+
+                            ||
+
+                            String(contact.notes || "")
+                                .toLowerCase()
+                                .includes(search)
+                        );
+                    }
+                );
+
+            displayContacts(filtered);
+        }
+    );
+}
 
 
 // ========================================
 // LOGOUT
 // ========================================
-
-const logoutButton =
-    document.getElementById("logoutButton");
-
 
 if (logoutButton) {
 
@@ -663,23 +842,21 @@ if (logoutButton) {
         "click",
         async function () {
 
+            const token =
+                getToken();
+
             try {
 
-                await fetch(
-                    `${API_URL}/logout`,
-                    {
+                if (token) {
 
-                        method: "POST",
-
-                        headers: {
-
-                            "Authorization":
-                                `Bearer ${TOKEN}`
-
+                    await fetch(
+                        `${API_URL}/logout`,
+                        {
+                            method: "POST",
+                            headers: getAuthHeaders()
                         }
-
-                    }
-                );
+                    );
+                }
 
             } catch (error) {
 
@@ -687,29 +864,11 @@ if (logoutButton) {
                     "Logout request failed:",
                     error
                 );
-
             }
 
-
-            localStorage.removeItem(
-                "crmLoggedIn"
-            );
-
-            localStorage.removeItem(
-                "crmToken"
-            );
-
-            localStorage.removeItem(
-                "currentUser"
-            );
-
-
-            window.location.href =
-                "login.html";
-
+            logoutUser();
         }
     );
-
 }
 
 
@@ -719,11 +878,34 @@ if (logoutButton) {
 
 async function startContactsPage() {
 
-    await loadCustomers();
+    loadUser();
+
+    const token =
+        getToken();
+
+    if (!token) {
+
+        alert(
+            "Please login again."
+        );
+
+        logoutUser();
+        return;
+    }
+
+    const customersLoaded =
+        await loadCustomers();
+
+    if (!customersLoaded) {
+        return;
+    }
 
     await loadContacts();
-
 }
 
+
+// ========================================
+// START
+// ========================================
 
 startContactsPage();
