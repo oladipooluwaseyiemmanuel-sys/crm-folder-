@@ -2,7 +2,10 @@
 // DASHBOARD
 // ========================================
 
-// Check login
+// ========================================
+// LOGIN CHECK
+// ========================================
+
 if (localStorage.getItem("crmLoggedIn") !== "true") {
     window.location.href = "login.html";
 }
@@ -12,7 +15,46 @@ if (localStorage.getItem("crmLoggedIn") !== "true") {
 // API
 // ========================================
 
-const API_URL = "http://localhost:3000/api";
+// IMPORTANT:
+// Do NOT use localhost here.
+// Render serves the frontend and backend together.
+const API_URL = "/api";
+
+
+// ========================================
+// AUTHENTICATION
+// ========================================
+
+function getToken() {
+    return localStorage.getItem("crmToken");
+}
+
+
+function getAuthHeaders() {
+
+    const token = getToken();
+
+    return {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`
+    };
+}
+
+
+// ========================================
+// LOGOUT
+// ========================================
+
+function logoutUser() {
+
+    localStorage.removeItem("crmLoggedIn");
+    localStorage.removeItem("crmToken");
+    localStorage.removeItem("currentUser");
+
+    sessionStorage.clear();
+
+    window.location.href = "login.html";
+}
 
 
 // ========================================
@@ -34,25 +76,11 @@ const pendingTasks =
 const userName =
     document.getElementById("userName");
 
+const userAvatar =
+    document.getElementById("userAvatar");
+
 const logoutButton =
     document.getElementById("logoutButton");
-
-
-// ========================================
-// AUTH HEADERS
-// ========================================
-
-function getAuthHeaders() {
-
-    const token =
-        localStorage.getItem("crmToken");
-
-    return {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${token}`
-    };
-
-}
 
 
 // ========================================
@@ -73,10 +101,25 @@ function loadUser() {
         const user =
             JSON.parse(savedUser);
 
-        if (userName && user.fullName) {
+        const name =
+            user.fullName ||
+            user.name ||
+            user.username ||
+            "User";
+
+
+        if (userName) {
 
             userName.textContent =
-                user.fullName;
+                name;
+
+        }
+
+
+        if (userAvatar) {
+
+            userAvatar.textContent =
+                name.charAt(0).toUpperCase();
 
         }
 
@@ -104,21 +147,59 @@ async function loadCustomers() {
             await fetch(
                 `${API_URL}/customers`,
                 {
+                    method: "GET",
                     headers: getAuthHeaders()
                 }
             );
 
-        if (!response.ok) {
-            throw new Error(
-                "Could not load customers"
+
+        // Session expired
+
+        if (response.status === 401) {
+
+            alert(
+                "Your login session has expired. Please login again."
             );
+
+            logoutUser();
+
+            return;
+
         }
 
-        const customers =
+
+        if (!response.ok) {
+
+            let result = {};
+
+            try {
+                result =
+                    await response.json();
+            } catch (error) {
+                // Ignore invalid JSON
+            }
+
+            throw new Error(
+                result.message ||
+                "Could not load customers."
+            );
+
+        }
+
+
+        const result =
             await response.json();
 
 
-        // Total customers
+        const customers =
+            Array.isArray(result)
+                ? result
+                : result.customers || [];
+
+
+        // ========================================
+        // TOTAL CUSTOMERS
+        // ========================================
 
         if (totalCustomers) {
 
@@ -128,9 +209,9 @@ async function loadCustomers() {
         }
 
 
-        // New customers
-
-        // Customers created in the last 30 days
+        // ========================================
+        // NEW CUSTOMERS
+        // ========================================
 
         const now =
             new Date();
@@ -144,21 +225,28 @@ async function loadCustomers() {
 
 
         const recentCustomers =
-            customers.filter(function(customer) {
+            customers.filter(
+                function(customer) {
 
-                const createdDate =
-                    new Date(
+                    const createdValue =
                         customer.createdAt ||
                         customer.created_at ||
-                        customer.date
+                        customer.date;
+
+                    if (!createdValue) {
+                        return false;
+                    }
+
+                    const createdDate =
+                        new Date(createdValue);
+
+                    return (
+                        !isNaN(createdDate.getTime()) &&
+                        createdDate >= thirtyDaysAgo
                     );
 
-                return (
-                    !isNaN(createdDate) &&
-                    createdDate >= thirtyDaysAgo
-                );
-
-            });
+                }
+            );
 
 
         if (newCustomers) {
@@ -168,6 +256,7 @@ async function loadCustomers() {
 
         }
 
+
     } catch (error) {
 
         console.error(
@@ -175,9 +264,11 @@ async function loadCustomers() {
             error
         );
 
+
         if (totalCustomers) {
             totalCustomers.textContent = "0";
         }
+
 
         if (newCustomers) {
             newCustomers.textContent = "0";
@@ -200,18 +291,54 @@ async function loadContacts() {
             await fetch(
                 `${API_URL}/contacts`,
                 {
+                    method: "GET",
                     headers: getAuthHeaders()
                 }
             );
 
-        if (!response.ok) {
-            throw new Error(
-                "Could not load contacts"
+
+        // Session expired
+
+        if (response.status === 401) {
+
+            alert(
+                "Your login session has expired. Please login again."
             );
+
+            logoutUser();
+
+            return;
+
         }
 
-        const contacts =
+
+        if (!response.ok) {
+
+            let result = {};
+
+            try {
+                result =
+                    await response.json();
+            } catch (error) {
+                // Ignore invalid JSON
+            }
+
+            throw new Error(
+                result.message ||
+                "Could not load contacts."
+            );
+
+        }
+
+
+        const result =
             await response.json();
+
+
+        const contacts =
+            Array.isArray(result)
+                ? result
+                : result.contacts || [];
 
 
         if (totalInteractions) {
@@ -221,12 +348,14 @@ async function loadContacts() {
 
         }
 
+
     } catch (error) {
 
         console.error(
             "CONTACT DASHBOARD ERROR:",
             error
         );
+
 
         if (totalInteractions) {
 
@@ -252,28 +381,72 @@ async function loadTasks() {
             await fetch(
                 `${API_URL}/tasks`,
                 {
+                    method: "GET",
                     headers: getAuthHeaders()
                 }
             );
 
-        if (!response.ok) {
-            throw new Error(
-                "Could not load tasks"
+
+        // Session expired
+
+        if (response.status === 401) {
+
+            alert(
+                "Your login session has expired. Please login again."
             );
+
+            logoutUser();
+
+            return;
+
         }
 
-        const tasks =
+
+        if (!response.ok) {
+
+            let result = {};
+
+            try {
+                result =
+                    await response.json();
+            } catch (error) {
+                // Ignore invalid JSON
+            }
+
+            throw new Error(
+                result.message ||
+                "Could not load tasks."
+            );
+
+        }
+
+
+        const result =
             await response.json();
 
 
+        const tasks =
+            Array.isArray(result)
+                ? result
+                : result.tasks || [];
+
+
+        // ========================================
+        // PENDING TASKS
+        // ========================================
+
         const pending =
-            tasks.filter(function(task) {
+            tasks.filter(
+                function(task) {
 
-                return (
-                    task.status !== "Completed"
-                );
+                    return (
+                        String(task.status || "")
+                            .toLowerCase() !==
+                        "completed"
+                    );
 
-            });
+                }
+            );
 
 
         if (pendingTasks) {
@@ -283,12 +456,14 @@ async function loadTasks() {
 
         }
 
+
     } catch (error) {
 
         console.error(
             "TASK DASHBOARD ERROR:",
             error
         );
+
 
         if (pendingTasks) {
 
@@ -303,7 +478,7 @@ async function loadTasks() {
 
 
 // ========================================
-// LOGOUT
+// LOGOUT BUTTON
 // ========================================
 
 if (logoutButton) {
@@ -313,7 +488,7 @@ if (logoutButton) {
         async function() {
 
             const token =
-                localStorage.getItem("crmToken");
+                getToken();
 
 
             try {
@@ -337,28 +512,14 @@ if (logoutButton) {
             } catch (error) {
 
                 console.error(
-                    "Logout error:",
+                    "Logout request failed:",
                     error
                 );
 
             }
 
 
-            localStorage.removeItem(
-                "crmLoggedIn"
-            );
-
-            localStorage.removeItem(
-                "crmToken"
-            );
-
-            localStorage.removeItem(
-                "currentUser"
-            );
-
-
-            window.location.href =
-                "login.html";
+            logoutUser();
 
         }
     );
@@ -374,6 +535,24 @@ async function startDashboard() {
 
     loadUser();
 
+
+    const token =
+        getToken();
+
+
+    if (!token) {
+
+        alert(
+            "Please login again."
+        );
+
+        logoutUser();
+
+        return;
+
+    }
+
+
     await Promise.all([
         loadCustomers(),
         loadContacts(),
@@ -382,5 +561,9 @@ async function startDashboard() {
 
 }
 
+
+// ========================================
+// START
+// ========================================
 
 startDashboard();
