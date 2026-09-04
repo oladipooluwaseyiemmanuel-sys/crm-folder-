@@ -2,6 +2,10 @@
 // SETTINGS PAGE
 // ========================================
 
+// ========================================
+// LOGIN CHECK
+// ========================================
+
 if (localStorage.getItem("crmLoggedIn") !== "true") {
     window.location.href = "login.html";
 }
@@ -11,22 +15,38 @@ if (localStorage.getItem("crmLoggedIn") !== "true") {
 // API
 // ========================================
 
-const API_URL = "http://localhost:3000/api";
+// IMPORTANT:
+// Do NOT use localhost.
+// Render serves the frontend and backend together.
+const API_URL = "/api";
+
+
+// ========================================
+// TOKEN
+// ========================================
+
+function getToken() {
+    return localStorage.getItem("crmToken");
+}
 
 
 // ========================================
 // AUTH HEADERS
 // ========================================
 
-function getAuthHeaders() {
+function getAuthHeaders(includeContentType = false) {
 
-    const token = localStorage.getItem("crmToken");
+    const token = getToken();
 
-    return {
-        "Content-Type": "application/json",
+    const headers = {
         "Authorization": `Bearer ${token}`
     };
 
+    if (includeContentType) {
+        headers["Content-Type"] = "application/json";
+    }
+
+    return headers;
 }
 
 
@@ -55,6 +75,75 @@ const emailNotifications =
 const customerNotifications =
     document.getElementById("customerNotifications");
 
+const logoutButton =
+    document.getElementById("logoutButton");
+
+
+// ========================================
+// LOGOUT USER
+// ========================================
+
+function logoutUser() {
+
+    localStorage.removeItem("crmLoggedIn");
+    localStorage.removeItem("crmToken");
+    localStorage.removeItem("currentUser");
+
+    sessionStorage.clear();
+
+    window.location.href = "login.html";
+}
+
+
+// ========================================
+// LOAD USER
+// ========================================
+
+function loadUser() {
+
+    const savedUser =
+        localStorage.getItem("currentUser");
+
+    if (!savedUser) {
+        return;
+    }
+
+    try {
+
+        const user =
+            JSON.parse(savedUser);
+
+        const name =
+            user.fullName ||
+            user.name ||
+            user.username ||
+            "User";
+
+        const userName =
+            document.getElementById("userName");
+
+        const userAvatar =
+            document.getElementById("userAvatar");
+
+        if (userName) {
+            userName.textContent = name;
+        }
+
+        if (userAvatar) {
+            userAvatar.textContent =
+                name.charAt(0).toUpperCase();
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Could not load user:",
+            error
+        );
+
+    }
+}
+
 
 // ========================================
 // LOAD SETTINGS
@@ -68,58 +157,129 @@ async function loadSettings() {
             await fetch(
                 `${API_URL}/settings`,
                 {
+                    method: "GET",
                     headers: getAuthHeaders()
                 }
             );
 
 
-        if (!response.ok) {
+        // ========================================
+        // SESSION EXPIRED
+        // ========================================
 
-            throw new Error(
-                "Could not load settings"
+        if (response.status === 401) {
+
+            alert(
+                "Your login session has expired. Please login again."
             );
 
+            logoutUser();
+
+            return;
         }
 
 
-        const settings =
+        if (!response.ok) {
+
+            let result = {};
+
+            try {
+                result =
+                    await response.json();
+            } catch (error) {
+                // Ignore invalid JSON
+            }
+
+            throw new Error(
+                result.message ||
+                "Could not load settings."
+            );
+        }
+
+
+        const result =
             await response.json();
 
 
+        const settings =
+            result.settings || result;
+
+
+        // ========================================
+        // NAME
+        // ========================================
+
         if (nameInput) {
+
             nameInput.value =
                 settings.name || "";
+
         }
 
+
+        // ========================================
+        // EMAIL
+        // ========================================
 
         if (emailInput) {
+
             emailInput.value =
                 settings.email || "";
+
         }
 
+
+        // ========================================
+        // LANGUAGE
+        // ========================================
 
         if (languageInput) {
+
             languageInput.value =
-                settings.language || "English";
+                settings.language ||
+                "English";
+
         }
 
 
+        // ========================================
+        // TIMEZONE
+        // ========================================
+
         if (timezoneInput) {
+
             timezoneInput.value =
                 settings.timezone ||
                 "West Africa Time (WAT)";
+
         }
 
+
+        // ========================================
+        // EMAIL NOTIFICATIONS
+        // ========================================
 
         if (emailNotifications) {
+
             emailNotifications.checked =
-                Boolean(settings.emailNotifications);
+                Boolean(
+                    settings.emailNotifications
+                );
+
         }
 
 
+        // ========================================
+        // CUSTOMER NOTIFICATIONS
+        // ========================================
+
         if (customerNotifications) {
+
             customerNotifications.checked =
-                Boolean(settings.customerNotifications);
+                Boolean(
+                    settings.customerNotifications
+                );
+
         }
 
 
@@ -135,7 +295,6 @@ async function loadSettings() {
         );
 
     }
-
 }
 
 
@@ -152,11 +311,19 @@ if (settingsForm) {
             event.preventDefault();
 
 
+            // ========================================
+            // GET VALUES
+            // ========================================
+
             const name =
-                nameInput.value.trim();
+                nameInput
+                    ? nameInput.value.trim()
+                    : "";
 
             const email =
-                emailInput.value.trim();
+                emailInput
+                    ? emailInput.value.trim()
+                    : "";
 
             const language =
                 languageInput
@@ -179,6 +346,10 @@ if (settingsForm) {
                     : false;
 
 
+            // ========================================
+            // VALIDATION
+            // ========================================
+
             if (!name || !email) {
 
                 alert(
@@ -186,9 +357,12 @@ if (settingsForm) {
                 );
 
                 return;
-
             }
 
+
+            // ========================================
+            // SAVE
+            // ========================================
 
             try {
 
@@ -199,32 +373,62 @@ if (settingsForm) {
                             method: "PUT",
 
                             headers:
-                                getAuthHeaders(),
+                                getAuthHeaders(true),
 
-                            body: JSON.stringify({
+                            body:
+                                JSON.stringify({
 
-                                name: name,
+                                    name:
+                                        name,
 
-                                email: email,
+                                    email:
+                                        email,
 
-                                language: language,
+                                    language:
+                                        language,
 
-                                timezone: timezone,
+                                    timezone:
+                                        timezone,
 
-                                emailNotifications:
-                                    emailNotify,
+                                    emailNotifications:
+                                        emailNotify,
 
-                                customerNotifications:
-                                    customerNotify
+                                    customerNotifications:
+                                        customerNotify
 
-                            })
-
+                                })
                         }
                     );
 
 
-                const result =
-                    await response.json();
+                // ========================================
+                // SESSION EXPIRED
+                // ========================================
+
+                if (response.status === 401) {
+
+                    alert(
+                        "Your login session has expired. Please login again."
+                    );
+
+                    logoutUser();
+
+                    return;
+                }
+
+
+                let result = {};
+
+                try {
+
+                    result =
+                        await response.json();
+
+                } catch (error) {
+
+                    // Ignore invalid JSON
+
+                }
 
 
                 if (!response.ok) {
@@ -235,14 +439,57 @@ if (settingsForm) {
                     );
 
                     return;
-
                 }
 
+
+                // ========================================
+                // SUCCESS
+                // ========================================
 
                 alert(
                     "Settings saved successfully!"
                 );
 
+
+                // Update local user information
+                const currentUser =
+                    localStorage.getItem(
+                        "currentUser"
+                    );
+
+                if (currentUser) {
+
+                    try {
+
+                        const user =
+                            JSON.parse(currentUser);
+
+                        user.fullName =
+                            name;
+
+                        user.name =
+                            name;
+
+                        user.email =
+                            email;
+
+                        localStorage.setItem(
+                            "currentUser",
+                            JSON.stringify(user)
+                        );
+
+                    } catch (error) {
+
+                        console.error(
+                            "Could not update local user:",
+                            error
+                        );
+
+                    }
+                }
+
+
+                loadUser();
 
             } catch (error) {
 
@@ -267,10 +514,6 @@ if (settingsForm) {
 // LOGOUT
 // ========================================
 
-const logoutButton =
-    document.getElementById("logoutButton");
-
-
 if (logoutButton) {
 
     logoutButton.addEventListener(
@@ -278,8 +521,7 @@ if (logoutButton) {
         async function () {
 
             const token =
-                localStorage.getItem("crmToken");
-
+                getToken();
 
             try {
 
@@ -308,22 +550,7 @@ if (logoutButton) {
 
             }
 
-
-            localStorage.removeItem(
-                "crmLoggedIn"
-            );
-
-            localStorage.removeItem(
-                "crmToken"
-            );
-
-            localStorage.removeItem(
-                "currentUser"
-            );
-
-
-            window.location.href =
-                "login.html";
+            logoutUser();
 
         }
     );
@@ -332,7 +559,34 @@ if (logoutButton) {
 
 
 // ========================================
+// INITIALIZE
+// ========================================
+
+async function startSettingsPage() {
+
+    loadUser();
+
+    const token =
+        getToken();
+
+    if (!token) {
+
+        alert(
+            "Please login again."
+        );
+
+        logoutUser();
+
+        return;
+    }
+
+    await loadSettings();
+
+}
+
+
+// ========================================
 // START
 // ========================================
 
-loadSettings();
+startSettingsPage();
