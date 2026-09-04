@@ -10,14 +10,17 @@ if (localStorage.getItem("crmLoggedIn") !== "true") {
     window.location.href = "login.html";
 }
 
+
 // ========================================
 // API
 // ========================================
 
 // IMPORTANT:
-// Do NOT use localhost here.
-// Render serves the frontend and backend together.
-const API_URL = "/api";
+// Always use the current website's address.
+// This works locally and on Render.
+// It will NEVER use localhost:3000 by mistake.
+
+const API_URL = `${window.location.origin}/api`;
 
 
 // ========================================
@@ -28,9 +31,17 @@ function getToken() {
     return localStorage.getItem("crmToken");
 }
 
+
+// ========================================
+// AUTH HEADERS
+// ========================================
+
 function getAuthHeaders(includeContentType = false) {
+
+    const token = getToken();
+
     const headers = {
-        "Authorization": `Bearer ${getToken()}`
+        "Authorization": `Bearer ${token}`
     };
 
     if (includeContentType) {
@@ -47,47 +58,6 @@ function getAuthHeaders(includeContentType = false) {
 
 let customers = [];
 let contacts = [];
-
-
-// ========================================
-// USER INFORMATION
-// ========================================
-
-function loadUser() {
-    const savedUser = localStorage.getItem("currentUser");
-
-    if (!savedUser) {
-        return;
-    }
-
-    try {
-        const user = JSON.parse(savedUser);
-
-        const name =
-            user.fullName ||
-            user.name ||
-            user.username ||
-            "User";
-
-        const userName =
-            document.getElementById("userName");
-
-        const userAvatar =
-            document.getElementById("userAvatar");
-
-        if (userName) {
-            userName.textContent = name;
-        }
-
-        if (userAvatar) {
-            userAvatar.textContent =
-                name.charAt(0).toUpperCase();
-        }
-
-    } catch (error) {
-        console.error("Unable to load user:", error);
-    }
-}
 
 
 // ========================================
@@ -121,9 +91,59 @@ const contactCustomer =
 const logoutButton =
     document.getElementById("logoutButton");
 
+const userName =
+    document.getElementById("userName");
+
+const userAvatar =
+    document.getElementById("userAvatar");
+
 
 // ========================================
-// LOGOUT / SESSION EXPIRED
+// LOAD USER
+// ========================================
+
+function loadUser() {
+
+    const savedUser =
+        localStorage.getItem("currentUser");
+
+    if (!savedUser) {
+        return;
+    }
+
+    try {
+
+        const user =
+            JSON.parse(savedUser);
+
+        const name =
+            user.fullName ||
+            user.name ||
+            user.username ||
+            "User";
+
+        if (userName) {
+            userName.textContent = name;
+        }
+
+        if (userAvatar) {
+            userAvatar.textContent =
+                name.charAt(0).toUpperCase();
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Unable to load user:",
+            error
+        );
+
+    }
+}
+
+
+// ========================================
+// LOGOUT USER
 // ========================================
 
 function logoutUser() {
@@ -139,6 +159,20 @@ function logoutUser() {
 
 
 // ========================================
+// HANDLE UNAUTHORIZED
+// ========================================
+
+function handleUnauthorized() {
+
+    alert(
+        "Your login session has expired. Please login again."
+    );
+
+    logoutUser();
+}
+
+
+// ========================================
 // LOAD CUSTOMERS
 // ========================================
 
@@ -146,33 +180,33 @@ async function loadCustomers() {
 
     try {
 
-        const response = await fetch(
-            `${API_URL}/customers`,
-            {
-                method: "GET",
-                headers: getAuthHeaders()
-            }
-        );
+        const response =
+            await fetch(
+                `${API_URL}/customers`,
+                {
+                    method: "GET",
+                    headers: getAuthHeaders(),
+                    cache: "no-store"
+                }
+            );
 
         if (response.status === 401) {
 
-            alert(
-                "Your login session has expired. Please login again."
-            );
+            handleUnauthorized();
 
-            logoutUser();
             return false;
         }
 
+        let result = {};
+
+        try {
+            result =
+                await response.json();
+        } catch (error) {
+            result = {};
+        }
+
         if (!response.ok) {
-
-            let result = {};
-
-            try {
-                result = await response.json();
-            } catch (error) {
-                // Ignore JSON parsing error
-            }
 
             throw new Error(
                 result.message ||
@@ -180,34 +214,46 @@ async function loadCustomers() {
             );
         }
 
-        const result =
-            await response.json();
-
         customers =
             Array.isArray(result)
                 ? result
-                : result.customers || [];
+                : Array.isArray(result.customers)
+                    ? result.customers
+                    : [];
 
         if (contactCustomer) {
 
-            contactCustomer.innerHTML = `
-                <option value="">
-                    Select customer
-                </option>
-            `;
+            contactCustomer.innerHTML = "";
 
-            customers.forEach(function (customer) {
+            const defaultOption =
+                document.createElement("option");
 
-                const option =
-                    document.createElement("option");
+            defaultOption.value = "";
+            defaultOption.textContent =
+                "Select customer";
 
-                option.value = customer.id;
+            contactCustomer.appendChild(
+                defaultOption
+            );
 
-                option.textContent =
-                    customer.name || "Unnamed Customer";
+            customers.forEach(
+                function (customer) {
 
-                contactCustomer.appendChild(option);
-            });
+                    const option =
+                        document.createElement("option");
+
+                    option.value =
+                        customer.id;
+
+                    option.textContent =
+                        customer.name ||
+                        "Unnamed Customer";
+
+                    contactCustomer.appendChild(
+                        option
+                    );
+                }
+            );
         }
 
         return true;
@@ -249,33 +295,33 @@ async function loadContacts() {
 
     try {
 
-        const response = await fetch(
-            `${API_URL}/contacts`,
-            {
-                method: "GET",
-                headers: getAuthHeaders()
-            }
-        );
+        const response =
+            await fetch(
+                `${API_URL}/contacts`,
+                {
+                    method: "GET",
+                    headers: getAuthHeaders(),
+                    cache: "no-store"
+                }
+            );
 
         if (response.status === 401) {
 
-            alert(
-                "Your login session has expired. Please login again."
-            );
+            handleUnauthorized();
 
-            logoutUser();
             return;
         }
 
+        let result = {};
+
+        try {
+            result =
+                await response.json();
+        } catch (error) {
+            result = {};
+        }
+
         if (!response.ok) {
-
-            let result = {};
-
-            try {
-                result = await response.json();
-            } catch (error) {
-                // Ignore JSON parsing error
-            }
 
             throw new Error(
                 result.message ||
@@ -283,13 +329,12 @@ async function loadContacts() {
             );
         }
 
-        const result =
-            await response.json();
-
         contacts =
             Array.isArray(result)
                 ? result
-                : result.contacts || [];
+                : Array.isArray(result.contacts)
+                    ? result.contacts
+                    : [];
 
         displayContacts();
 
@@ -308,6 +353,7 @@ async function loadContacts() {
                 </td>
             </tr>
         `;
+
     }
 }
 
@@ -338,59 +384,65 @@ function displayContacts(list = contacts) {
         return;
     }
 
-    list.forEach(function (contact) {
+    list.forEach(
+        function (contact) {
 
-        const customer =
-            customers.find(function (item) {
+            const customer =
+                customers.find(
+                    function (item) {
 
-                return String(item.id) ===
-                    String(contact.customerId);
+                        return String(item.id) ===
+                            String(contact.customerId);
 
-            });
+                    }
+                );
 
-        const customerName =
-            customer
-                ? customer.name
-                : "Unknown Customer";
+            const customerName =
+                customer
+                    ? customer.name
+                    : "Unknown Customer";
 
-        const row =
-            document.createElement("tr");
+            const row =
+                document.createElement("tr");
 
-        row.innerHTML = `
-            <td>
-                ${escapeHTML(customerName)}
-            </td>
+            row.innerHTML = `
+                <td>
+                    ${escapeHTML(customerName)}
+                </td>
 
-            <td>
-                ${escapeHTML(contact.type)}
-            </td>
+                <td>
+                    ${escapeHTML(contact.type)}
+                </td>
 
-            <td>
-                ${escapeHTML(contact.date)}
-            </td>
+                <td>
+                    ${escapeHTML(contact.date)}
+                </td>
 
-            <td>
-                ${escapeHTML(contact.subject)}
-            </td>
+                <td>
+                    ${escapeHTML(contact.subject)}
+                </td>
 
-            <td>
-                ${escapeHTML(contact.notes || "-")}
-            </td>
+                <td>
+                    ${escapeHTML(
+                        contact.notes || "-"
+                    )}
+                </td>
 
-            <td>
+                <td>
 
-                <button
-                    type="button"
-                    class="delete-button"
-                    data-id="${escapeHTML(contact.id)}">
-                    Delete
-                </button>
+                    <button
+                        type="button"
+                        class="delete-button"
+                        data-id="${escapeHTML(contact.id)}">
+                        Delete
+                    </button>
 
-            </td>
-        `;
+                </td>
+            `;
 
-        contactTableBody.appendChild(row);
-    });
+            contactTableBody.appendChild(row);
+        }
+    );
 }
 
 
@@ -413,7 +465,7 @@ function escapeHTML(value) {
 
 
 // ========================================
-// OPEN MODAL
+// OPEN CONTACT MODAL
 // ========================================
 
 if (addContactButton) {
@@ -434,7 +486,9 @@ if (addContactButton) {
             }
 
             const dateInput =
-                document.getElementById("contactDate");
+                document.getElementById(
+                    "contactDate"
+                );
 
             if (dateInput) {
 
@@ -445,7 +499,10 @@ if (addContactButton) {
             }
 
             if (contactModal) {
-                contactModal.classList.add("show");
+
+                contactModal.classList.add(
+                    "show"
+                );
             }
         }
     );
@@ -453,13 +510,16 @@ if (addContactButton) {
 
 
 // ========================================
-// CLOSE MODAL
+// CLOSE CONTACT MODAL
 // ========================================
 
 function closeContactModal() {
 
     if (contactModal) {
-        contactModal.classList.remove("show");
+
+        contactModal.classList.remove(
+            "show"
+        );
     }
 
     if (contactForm) {
@@ -492,7 +552,10 @@ if (contactModal) {
         "click",
         function (event) {
 
-            if (event.target === contactModal) {
+            if (
+                event.target ===
+                contactModal
+            ) {
                 closeContactModal();
             }
         }
@@ -513,19 +576,29 @@ if (contactForm) {
             event.preventDefault();
 
             const customerElement =
-                document.getElementById("contactCustomer");
+                document.getElementById(
+                    "contactCustomer"
+                );
 
             const typeElement =
-                document.getElementById("contactType");
+                document.getElementById(
+                    "contactType"
+                );
 
             const dateElement =
-                document.getElementById("contactDate");
+                document.getElementById(
+                    "contactDate"
+                );
 
             const subjectElement =
-                document.getElementById("contactSubject");
+                document.getElementById(
+                    "contactSubject"
+                );
 
             const notesElement =
-                document.getElementById("contactNotes");
+                document.getElementById(
+                    "contactNotes"
+                );
 
             if (
                 !customerElement ||
@@ -583,32 +656,41 @@ if (contactForm) {
                                 getAuthHeaders(true),
 
                             body: JSON.stringify({
-                                customerId: customerId,
-                                type: type,
-                                date: date,
-                                subject: subject,
-                                notes: notes
+                                customerId:
+                                    customerId,
+
+                                type:
+                                    type,
+
+                                date:
+                                    date,
+
+                                subject:
+                                    subject,
+
+                                notes:
+                                    notes
                             })
                         }
                     );
 
                 if (response.status === 401) {
 
-                    alert(
-                        "Your login session has expired. Please login again."
-                    );
+                    handleUnauthorized();
 
-                    logoutUser();
                     return;
                 }
 
                 let result = {};
 
                 try {
+
                     result =
                         await response.json();
+
                 } catch (error) {
-                    // Ignore invalid JSON
+
+                    result = {};
                 }
 
                 if (!response.ok) {
@@ -677,21 +759,21 @@ async function deleteContact(id) {
 
         if (response.status === 401) {
 
-            alert(
-                "Your login session has expired. Please login again."
-            );
+            handleUnauthorized();
 
-            logoutUser();
             return;
         }
 
         let result = {};
 
         try {
+
             result =
                 await response.json();
+
         } catch (error) {
-            // Ignore invalid JSON
+
+            result = {};
         }
 
         if (!response.ok) {
@@ -725,7 +807,7 @@ async function deleteContact(id) {
 
 
 // ========================================
-// TABLE DELETE BUTTON
+// DELETE BUTTON
 // ========================================
 
 if (contactTableBody) {
@@ -744,7 +826,9 @@ if (contactTableBody) {
             }
 
             const id =
-                button.getAttribute("data-id");
+                button.getAttribute(
+                    "data-id"
+                );
 
             if (id) {
                 deleteContact(id);
@@ -771,7 +855,9 @@ if (searchContact) {
 
             if (!search) {
 
-                displayContacts(contacts);
+                displayContacts(
+                    contacts
+                );
 
                 return;
             }
@@ -784,42 +870,57 @@ if (searchContact) {
                             customers.find(
                                 function (item) {
 
-                                    return String(item.id) ===
-                                        String(contact.customerId);
+                                    return (
+                                        String(item.id) ===
+                                        String(
+                                            contact.customerId
+                                        )
+                                    );
                                 }
                             );
 
                         const customerName =
                             customer
-                                ? String(customer.name || "")
-                                    .toLowerCase()
+                                ? String(
+                                    customer.name || ""
+                                ).toLowerCase()
                                 : "";
 
                         return (
 
-                            customerName.includes(search)
+                            customerName.includes(
+                                search
+                            )
 
                             ||
 
-                            String(contact.type || "")
+                            String(
+                                contact.type || ""
+                            )
                                 .toLowerCase()
                                 .includes(search)
 
                             ||
 
-                            String(contact.date || "")
+                            String(
+                                contact.date || ""
+                            )
                                 .toLowerCase()
                                 .includes(search)
 
                             ||
 
-                            String(contact.subject || "")
+                            String(
+                                contact.subject || ""
+                            )
                                 .toLowerCase()
                                 .includes(search)
 
                             ||
 
-                            String(contact.notes || "")
+                            String(
+                                contact.notes || ""
+                            )
                                 .toLowerCase()
                                 .includes(search)
                         );
@@ -853,7 +954,8 @@ if (logoutButton) {
                         `${API_URL}/logout`,
                         {
                             method: "POST",
-                            headers: getAuthHeaders()
+                            headers:
+                                getAuthHeaders()
                         }
                     );
                 }
@@ -890,8 +992,14 @@ async function startContactsPage() {
         );
 
         logoutUser();
+
         return;
     }
+
+    console.log(
+        "CRM API:",
+        API_URL
+    );
 
     const customersLoaded =
         await loadCustomers();
