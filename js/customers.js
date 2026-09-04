@@ -12,21 +12,16 @@ if (localStorage.getItem("crmLoggedIn") !== "true") {
 
 
 // ========================================
-// API
+// API URL
 // ========================================
+//
 // IMPORTANT:
 // Do NOT use localhost here.
-// This automatically uses Render in production
-// and localhost when running the frontend locally.
+// The frontend and backend are running
+// from the same Render service.
+//
 
-const API_URL = `${window.location.origin}/api/customers`;
-
-
-// ========================================
-// GLOBAL DATA
-// ========================================
-
-let allCustomers = [];
+const API_URL = "/api/customers";
 
 
 // ========================================
@@ -34,7 +29,7 @@ let allCustomers = [];
 // ========================================
 
 function getToken() {
-    return localStorage.getItem("crmToken") || "";
+    return localStorage.getItem("crmToken");
 }
 
 
@@ -44,9 +39,9 @@ function getToken() {
 
 function getAuthHeaders(includeContentType = false) {
 
-    const headers = {};
-
     const token = getToken();
+
+    const headers = {};
 
     if (token) {
         headers["Authorization"] = `Bearer ${token}`;
@@ -57,47 +52,6 @@ function getAuthHeaders(includeContentType = false) {
     }
 
     return headers;
-}
-
-
-// ========================================
-// LOGOUT
-// ========================================
-
-function logoutUser(redirect = true) {
-
-    localStorage.removeItem("crmLoggedIn");
-    localStorage.removeItem("crmToken");
-    localStorage.removeItem("currentUser");
-
-    sessionStorage.clear();
-
-    if (redirect) {
-        window.location.href = "login.html";
-    }
-}
-
-
-// ========================================
-// READ RESPONSE SAFELY
-// ========================================
-
-async function readResponse(response) {
-
-    const contentType =
-        response.headers.get("content-type") || "";
-
-    if (contentType.includes("application/json")) {
-        return await response.json();
-    }
-
-    const text = await response.text();
-
-    return {
-        message:
-            text ||
-            `Request failed with status ${response.status}`
-    };
 }
 
 
@@ -134,6 +88,13 @@ const userName =
 
 const userAvatar =
     document.getElementById("userAvatar");
+
+
+// ========================================
+// CUSTOMER DATA
+// ========================================
+
+let allCustomers = [];
 
 
 // ========================================
@@ -181,14 +142,229 @@ function loadUser() {
 
 
 // ========================================
+// HANDLE API RESPONSE
+// ========================================
+
+async function getResponseData(response) {
+
+    const text =
+        await response.text();
+
+    if (!text) {
+        return {};
+    }
+
+    try {
+        return JSON.parse(text);
+    } catch (error) {
+        return {
+            message: text
+        };
+    }
+}
+
+
+// ========================================
+// HANDLE UNAUTHORIZED
+// ========================================
+
+function handleUnauthorized(response) {
+
+    if (response.status === 401) {
+
+        alert(
+            "Your login session has expired. Please login again."
+        );
+
+        logoutUser();
+
+        return true;
+    }
+
+    return false;
+}
+
+
+// ========================================
+// LOAD CUSTOMERS
+// ========================================
+
+async function loadCustomers() {
+
+    if (!tableBody) {
+        return;
+    }
+
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="5"
+                style="text-align:center; padding:30px;">
+                Loading customers...
+            </td>
+        </tr>
+    `;
+
+    try {
+
+        const response =
+            await fetch(API_URL, {
+                method: "GET",
+                headers: getAuthHeaders(),
+                cache: "no-store"
+            });
+
+        if (handleUnauthorized(response)) {
+            return;
+        }
+
+        const result =
+            await getResponseData(response);
+
+        if (!response.ok) {
+
+            throw new Error(
+                result.message ||
+                "Failed to load customers."
+            );
+        }
+
+        const customers =
+            Array.isArray(result)
+                ? result
+                : Array.isArray(result.customers)
+                    ? result.customers
+                    : [];
+
+        allCustomers = customers;
+
+        displayCustomers(customers);
+
+    } catch (error) {
+
+        console.error(
+            "Error loading customers:",
+            error
+        );
+
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="5"
+                    style="text-align:center; padding:30px;">
+                    Unable to load customers.
+                    <br>
+                    <small>
+                        ${escapeHTML(error.message)}
+                    </small>
+                </td>
+            </tr>
+        `;
+    }
+}
+
+
+// ========================================
+// DISPLAY CUSTOMERS
+// ========================================
+
+function displayCustomers(customers) {
+
+    if (!tableBody) {
+        return;
+    }
+
+    tableBody.innerHTML = "";
+
+    if (!Array.isArray(customers) || customers.length === 0) {
+
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="5"
+                    style="text-align:center; padding:30px;">
+                    No customers found.
+                </td>
+            </tr>
+        `;
+
+        return;
+    }
+
+    customers.forEach(function (customer) {
+
+        const row =
+            document.createElement("tr");
+
+        const id =
+            customer.id || "";
+
+        const name =
+            customer.name || "";
+
+        const email =
+            customer.email || "";
+
+        const phone =
+            customer.phone || "";
+
+        const status =
+            customer.status || "Lead";
+
+        row.innerHTML = `
+            <td>
+                <strong>
+                    ${escapeHTML(name)}
+                </strong>
+            </td>
+
+            <td>
+                ${escapeHTML(email)}
+            </td>
+
+            <td>
+                ${escapeHTML(phone)}
+            </td>
+
+            <td>
+                <span class="status ${escapeHTML(
+                    getStatusClass(status)
+                )}">
+                    ${escapeHTML(status)}
+                </span>
+            </td>
+
+            <td>
+
+                <button
+                    type="button"
+                    class="table-action edit-btn"
+                    data-id="${escapeHTML(id)}">
+                    Edit
+                </button>
+
+                <button
+                    type="button"
+                    class="table-action delete-btn"
+                    data-id="${escapeHTML(id)}">
+                    Delete
+                </button>
+
+            </td>
+        `;
+
+        tableBody.appendChild(row);
+    });
+}
+
+
+// ========================================
 // STATUS CLASS
 // ========================================
 
 function getStatusClass(status) {
 
-    return String(status || "Lead")
+    return String(status || "")
         .toLowerCase()
-        .replace(/\s+/g, "-");
+        .replace(/\s+/g, "-")
+        .replace(/[^a-z0-9_-]/g, "");
 }
 
 
@@ -211,237 +387,7 @@ function escapeHTML(value) {
 
 
 // ========================================
-// DISPLAY CUSTOMERS
-// ========================================
-
-function displayCustomers(customers) {
-
-    if (!tableBody) {
-        return;
-    }
-
-    tableBody.innerHTML = "";
-
-    if (
-        !Array.isArray(customers) ||
-        customers.length === 0
-    ) {
-
-        tableBody.innerHTML = `
-            <tr>
-                <td
-                    colspan="5"
-                    style="text-align:center; padding:30px;"
-                >
-                    No customers found.
-                </td>
-            </tr>
-        `;
-
-        return;
-    }
-
-
-    customers.forEach(function (customer) {
-
-        const row =
-            document.createElement("tr");
-
-        const id =
-            customer.id ??
-            customer._id ??
-            "";
-
-        const name =
-            customer.name ??
-            customer.fullName ??
-            "";
-
-        const email =
-            customer.email ??
-            "";
-
-        const phone =
-            customer.phone ??
-            "";
-
-        const status =
-            customer.status ??
-            "Lead";
-
-
-        row.innerHTML = `
-            <td>
-                <strong>
-                    ${escapeHTML(name)}
-                </strong>
-            </td>
-
-            <td>
-                ${escapeHTML(email)}
-            </td>
-
-            <td>
-                ${escapeHTML(phone)}
-            </td>
-
-            <td>
-                <span
-                    class="status ${escapeHTML(
-                        getStatusClass(status)
-                    )}"
-                >
-                    ${escapeHTML(status)}
-                </span>
-            </td>
-
-            <td>
-
-                <button
-                    type="button"
-                    class="table-action edit-btn"
-                    data-id="${escapeHTML(id)}"
-                >
-                    Edit
-                </button>
-
-                <button
-                    type="button"
-                    class="table-action delete-btn"
-                    data-id="${escapeHTML(id)}"
-                >
-                    Delete
-                </button>
-
-            </td>
-        `;
-
-        tableBody.appendChild(row);
-
-    });
-}
-
-
-// ========================================
-// LOAD CUSTOMERS
-// ========================================
-
-async function loadCustomers() {
-
-    if (!tableBody) {
-        return;
-    }
-
-    tableBody.innerHTML = `
-        <tr>
-            <td
-                colspan="5"
-                style="text-align:center; padding:30px;"
-            >
-                Loading customers...
-            </td>
-        </tr>
-    `;
-
-
-    try {
-
-        const token =
-            getToken();
-
-        if (!token) {
-
-            logoutUser();
-
-            return;
-        }
-
-
-        console.log(
-            "Loading customers from:",
-            API_URL
-        );
-
-
-        const response =
-            await fetch(API_URL, {
-
-                method: "GET",
-
-                headers:
-                    getAuthHeaders()
-
-            });
-
-
-        if (response.status === 401) {
-
-            logoutUser();
-
-            return;
-        }
-
-
-        const result =
-            await readResponse(response);
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                result.message ||
-                "Failed to load customers."
-            );
-        }
-
-
-        const customers =
-            Array.isArray(result)
-                ? result
-                : Array.isArray(result.customers)
-                    ? result.customers
-                    : Array.isArray(result.data)
-                        ? result.data
-                        : [];
-
-
-        allCustomers =
-            customers;
-
-
-        displayCustomers(
-            allCustomers
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "Error loading customers:",
-            error
-        );
-
-
-        tableBody.innerHTML = `
-            <tr>
-                <td
-                    colspan="5"
-                    style="text-align:center; padding:30px;"
-                >
-                    Unable to load customers.
-                    <br>
-                    <small>
-                        ${escapeHTML(error.message)}
-                    </small>
-                </td>
-            </tr>
-        `;
-    }
-}
-
-
-// ========================================
-// OPEN CUSTOMER MODAL
+// OPEN MODAL
 // ========================================
 
 function openCustomerModal() {
@@ -459,7 +405,7 @@ function openCustomerModal() {
 
 
 // ========================================
-// CLOSE CUSTOMER MODAL
+// CLOSE MODAL
 // ========================================
 
 function closeCustomerModal() {
@@ -486,7 +432,6 @@ if (addButton) {
         "click",
         openCustomerModal
     );
-
 }
 
 
@@ -500,7 +445,6 @@ if (closeButton) {
         "click",
         closeCustomerModal
     );
-
 }
 
 
@@ -514,7 +458,6 @@ if (cancelButton) {
         "click",
         closeCustomerModal
     );
-
 }
 
 
@@ -534,7 +477,6 @@ if (modal) {
 
         }
     );
-
 }
 
 
@@ -549,7 +491,6 @@ if (form) {
         async function (event) {
 
             event.preventDefault();
-
 
             const nameElement =
                 document.getElementById(
@@ -571,7 +512,6 @@ if (form) {
                     "customerStatus"
                 );
 
-
             if (
                 !nameElement ||
                 !emailElement ||
@@ -586,7 +526,6 @@ if (form) {
                 return;
             }
 
-
             const name =
                 nameElement.value.trim();
 
@@ -597,32 +536,42 @@ if (form) {
                 phoneElement.value.trim();
 
             const status =
-                statusElement.value ||
-                "Lead";
+                statusElement.value || "Lead";
 
-
-            if (
-                !name ||
-                !email ||
-                !phone
-            ) {
+            if (!name) {
 
                 alert(
-                    "Please complete all customer fields."
+                    "Please enter the customer's name."
                 );
 
                 return;
             }
 
+            if (!email) {
+
+                alert(
+                    "Please enter the customer's email."
+                );
+
+                return;
+            }
+
+            if (!phone) {
+
+                alert(
+                    "Please enter the customer's phone number."
+                );
+
+                return;
+            }
 
             const token =
                 getToken();
 
-
             if (!token) {
 
                 alert(
-                    "Your login session has expired. Please log in again."
+                    "You are not logged in. Please login again."
                 );
 
                 logoutUser();
@@ -631,59 +580,37 @@ if (form) {
             }
 
 
+            // ========================================
+            // SEND CUSTOMER TO BACKEND
+            // ========================================
+
             try {
 
-                console.log(
-                    "Adding customer to:",
-                    API_URL
-                );
-
-
                 const response =
-                    await fetch(
-                        API_URL,
-                        {
+                    await fetch(API_URL, {
 
-                            method: "POST",
+                        method: "POST",
 
-                            headers:
-                                getAuthHeaders(true),
+                        headers:
+                            getAuthHeaders(true),
 
-                            body:
-                                JSON.stringify({
+                        body: JSON.stringify({
+                            name: name,
+                            email: email,
+                            phone: phone,
+                            status: status
+                        })
 
-                                    name:
-                                        name,
-
-                                    email:
-                                        email,
-
-                                    phone:
-                                        phone,
-
-                                    status:
-                                        status
-
-                                })
-
-                        }
-                    );
+                    });
 
 
-                if (
-                    response.status === 401
-                ) {
-
-                    logoutUser();
-
+                if (handleUnauthorized(response)) {
                     return;
                 }
 
 
                 const result =
-                    await readResponse(
-                        response
-                    );
+                    await getResponseData(response);
 
 
                 if (!response.ok) {
@@ -705,28 +632,24 @@ if (form) {
                 closeCustomerModal();
 
 
+                // Reload customer list
                 await loadCustomers();
-
 
             } catch (error) {
 
                 console.error(
-                    "Error adding customer:",
+                    "CUSTOMER POST ERROR:",
                     error
                 );
 
-
                 alert(
                     "Could not connect to the CRM backend.\n\n" +
-                    "API: " +
-                    API_URL
+                    "Please make sure the latest backend is deployed on Render."
                 );
-
             }
 
         }
     );
-
 }
 
 
@@ -740,19 +663,12 @@ async function editCustomer(id) {
         return;
     }
 
-
     const customer =
         allCustomers.find(
-            function (item) {
-
-                return String(
-                    item.id ??
-                    item._id
-                ) === String(id);
-
-            }
+            item =>
+                String(item.id) ===
+                String(id)
         );
-
 
     if (!customer) {
 
@@ -767,11 +683,8 @@ async function editCustomer(id) {
     const name =
         prompt(
             "Customer Name:",
-            customer.name ||
-            customer.fullName ||
-            ""
+            customer.name || ""
         );
-
 
     if (name === null) {
         return;
@@ -784,7 +697,6 @@ async function editCustomer(id) {
             customer.email || ""
         );
 
-
     if (email === null) {
         return;
     }
@@ -796,7 +708,6 @@ async function editCustomer(id) {
             customer.phone || ""
         );
 
-
     if (phone === null) {
         return;
     }
@@ -805,10 +716,8 @@ async function editCustomer(id) {
     const status =
         prompt(
             "Status (Lead, Active, Inactive):",
-            customer.status ||
-            "Lead"
+            customer.status || "Lead"
         );
-
 
     if (status === null) {
         return;
@@ -841,41 +750,33 @@ async function editCustomer(id) {
                     headers:
                         getAuthHeaders(true),
 
-                    body:
-                        JSON.stringify({
+                    body: JSON.stringify({
 
-                            name:
-                                name.trim(),
+                        name:
+                            name.trim(),
 
-                            email:
-                                email.trim(),
+                        email:
+                            email.trim(),
 
-                            phone:
-                                phone.trim(),
+                        phone:
+                            phone.trim(),
 
-                            status:
-                                status.trim()
+                        status:
+                            status.trim() || "Lead"
 
-                        })
+                    })
 
                 }
             );
 
 
-        if (
-            response.status === 401
-        ) {
-
-            logoutUser();
-
+        if (handleUnauthorized(response)) {
             return;
         }
 
 
         const result =
-            await readResponse(
-                response
-            );
+            await getResponseData(response);
 
 
         if (!response.ok) {
@@ -896,7 +797,6 @@ async function editCustomer(id) {
 
         await loadCustomers();
 
-
     } catch (error) {
 
         console.error(
@@ -904,13 +804,9 @@ async function editCustomer(id) {
             error
         );
 
-
         alert(
-            "Could not connect to the CRM backend.\n\n" +
-            "API: " +
-            API_URL
+            "Could not connect to the CRM backend."
         );
-
     }
 }
 
@@ -930,7 +826,6 @@ async function deleteCustomer(id) {
         confirm(
             "Are you sure you want to delete this customer?"
         );
-
 
     if (!confirmed) {
         return;
@@ -953,20 +848,13 @@ async function deleteCustomer(id) {
             );
 
 
-        if (
-            response.status === 401
-        ) {
-
-            logoutUser();
-
+        if (handleUnauthorized(response)) {
             return;
         }
 
 
         const result =
-            await readResponse(
-                response
-            );
+            await getResponseData(response);
 
 
         if (!response.ok) {
@@ -987,7 +875,6 @@ async function deleteCustomer(id) {
 
         await loadCustomers();
 
-
     } catch (error) {
 
         console.error(
@@ -995,13 +882,9 @@ async function deleteCustomer(id) {
             error
         );
 
-
         alert(
-            "Could not connect to the CRM backend.\n\n" +
-            "API: " +
-            API_URL
+            "Could not connect to the CRM backend."
         );
-
     }
 }
 
@@ -1017,26 +900,18 @@ if (tableBody) {
         function (event) {
 
             const button =
-                event.target.closest(
-                    "button"
-                );
-
+                event.target.closest("button");
 
             if (!button) {
                 return;
             }
 
-
             const id =
-                button.getAttribute(
-                    "data-id"
-                );
-
+                button.getAttribute("data-id");
 
             if (!id) {
                 return;
             }
-
 
             if (
                 button.classList.contains(
@@ -1049,7 +924,6 @@ if (tableBody) {
                 return;
             }
 
-
             if (
                 button.classList.contains(
                     "delete-btn"
@@ -1057,12 +931,10 @@ if (tableBody) {
             ) {
 
                 deleteCustomer(id);
-
             }
 
         }
     );
-
 }
 
 
@@ -1081,7 +953,6 @@ if (searchInput) {
                     .toLowerCase()
                     .trim();
 
-
             if (!search) {
 
                 displayCustomers(
@@ -1096,87 +967,94 @@ if (searchInput) {
                 allCustomers.filter(
                     function (customer) {
 
-                        return [
+                        return (
 
-                            customer.name,
+                            String(
+                                customer.name || ""
+                            )
+                                .toLowerCase()
+                                .includes(search)
 
-                            customer.fullName,
+                            ||
 
-                            customer.email,
+                            String(
+                                customer.email || ""
+                            )
+                                .toLowerCase()
+                                .includes(search)
 
-                            customer.phone,
+                            ||
 
-                            customer.status
+                            String(
+                                customer.phone || ""
+                            )
+                                .toLowerCase()
+                                .includes(search)
 
-                        ]
-                            .filter(Boolean)
-                            .some(
-                                function (value) {
+                            ||
 
-                                    return String(
-                                        value
-                                    )
-                                        .toLowerCase()
-                                        .includes(
-                                            search
-                                        );
+                            String(
+                                customer.status || ""
+                            )
+                                .toLowerCase()
+                                .includes(search)
 
-                                }
-                            );
+                        );
 
                     }
                 );
 
 
-            displayCustomers(
-                filtered
-            );
+            displayCustomers(filtered);
 
         }
     );
-
 }
 
 
 // ========================================
-// LOGOUT BUTTON
+// LOGOUT
 // ========================================
+
+function logoutUser() {
+
+    localStorage.removeItem(
+        "crmLoggedIn"
+    );
+
+    localStorage.removeItem(
+        "crmToken"
+    );
+
+    localStorage.removeItem(
+        "currentUser"
+    );
+
+    sessionStorage.clear();
+
+    window.location.href =
+        "login.html";
+}
+
 
 if (logoutButton) {
 
     logoutButton.addEventListener(
         "click",
-        function (event) {
-
-            event.preventDefault();
-
-            logoutUser();
-
-        }
+        logoutUser
     );
-
 }
 
 
 // ========================================
-// INITIALIZE
+// INITIALIZE PAGE
 // ========================================
 
 async function initializeCustomersPage() {
 
     loadUser();
 
-
-    if (!getToken()) {
-
-        logoutUser();
-
-        return;
-    }
-
-
     await loadCustomers();
-
 }
 
 
