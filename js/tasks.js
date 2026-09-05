@@ -2,6 +2,7 @@
 // TASKS PAGE
 // ========================================
 
+
 // ========================================
 // LOGIN CHECK
 // ========================================
@@ -15,10 +16,16 @@ if (localStorage.getItem("crmLoggedIn") !== "true") {
 // API
 // ========================================
 
-// IMPORTANT:
-// Use the Render server's own /api path.
-// DO NOT use localhost.
-const API_URL = "/api";
+// Local computer:
+// http://localhost:10000/api
+//
+// Render:
+// /api
+
+const API_URL =
+    window.location.hostname === "localhost"
+        ? "http://localhost:10000/api"
+        : "/api";
 
 
 // ========================================
@@ -28,6 +35,7 @@ const API_URL = "/api";
 function getToken() {
     return localStorage.getItem("crmToken");
 }
+
 
 function getAuthHeaders(includeContentType = false) {
 
@@ -139,10 +147,35 @@ function loadUser() {
 
 
 // ========================================
-// LOGOUT USER
+// LOGOUT
 // ========================================
 
-function logoutUser() {
+async function logoutUser() {
+
+    const token = getToken();
+
+    try {
+
+        if (token) {
+
+            await fetch(
+                `${API_URL}/logout`,
+                {
+                    method: "POST",
+                    headers: getAuthHeaders()
+                }
+            );
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "Logout error:",
+            error
+        );
+
+    }
 
     localStorage.removeItem("crmLoggedIn");
     localStorage.removeItem("crmToken");
@@ -151,6 +184,37 @@ function logoutUser() {
     sessionStorage.clear();
 
     window.location.href = "login.html";
+}
+
+
+if (logoutButton) {
+
+    logoutButton.addEventListener(
+        "click",
+        logoutUser
+    );
+
+}
+
+
+// ========================================
+// AUTH ERROR HANDLER
+// ========================================
+
+function handleAuthError(response) {
+
+    if (response.status === 401) {
+
+        alert(
+            "Your login session has expired. Please login again."
+        );
+
+        logoutUser();
+
+        return true;
+    }
+
+    return false;
 }
 
 
@@ -172,48 +236,34 @@ async function loadCustomers() {
             );
 
 
-        // Session expired
-        if (response.status === 401) {
-
-            alert(
-                "Your login session has expired. Please login again."
-            );
-
-            logoutUser();
-
+        if (handleAuthError(response)) {
             return false;
         }
 
 
         if (!response.ok) {
 
-            let errorMessage =
+            let message =
                 "Could not load customers.";
 
             try {
 
-                const errorResult =
+                const result =
                     await response.json();
 
-                errorMessage =
-                    errorResult.message ||
-                    errorMessage;
+                message =
+                    result.message ||
+                    message;
 
-            } catch (error) {
-                // Ignore invalid JSON
-            }
+            } catch (error) {}
 
-            throw new Error(errorMessage);
+            throw new Error(message);
         }
 
 
         const result =
             await response.json();
 
-
-        // Support both:
-        // [customers]
-        // { customers: [...] }
 
         if (Array.isArray(result)) {
 
@@ -224,8 +274,7 @@ async function loadCustomers() {
             Array.isArray(result.customers)
         ) {
 
-            customers =
-                result.customers;
+            customers = result.customers;
 
         } else {
 
@@ -234,39 +283,7 @@ async function loadCustomers() {
         }
 
 
-        // Fill customer dropdown
-
-        if (taskCustomer) {
-
-            taskCustomer.innerHTML = `
-                <option value="">
-                    Select customer
-                </option>
-            `;
-
-
-            customers.forEach(
-                function (customer) {
-
-                    const option =
-                        document.createElement("option");
-
-                    option.value =
-                        customer.id;
-
-                    option.textContent =
-                        customer.name ||
-                        "Unnamed Customer";
-
-                    taskCustomer.appendChild(
-                        option
-                    );
-
-                }
-            );
-
-        }
-
+        populateCustomerDropdown();
 
         return true;
 
@@ -278,12 +295,80 @@ async function loadCustomers() {
             error
         );
 
+        if (taskCustomer) {
+
+            taskCustomer.innerHTML = `
+                <option value="">
+                    Unable to load customers
+                </option>
+            `;
+
+        }
+
         alert(
             "Could not connect to the CRM backend."
         );
 
         return false;
     }
+}
+
+
+// ========================================
+// CUSTOMER DROPDOWN
+// ========================================
+
+function populateCustomerDropdown() {
+
+    if (!taskCustomer) {
+        return;
+    }
+
+
+    taskCustomer.innerHTML = `
+        <option value="">
+            Select customer
+        </option>
+    `;
+
+
+    if (customers.length === 0) {
+
+        const option =
+            document.createElement("option");
+
+        option.value = "";
+
+        option.textContent =
+            "No customers found";
+
+        option.disabled = true;
+
+        taskCustomer.appendChild(option);
+
+        return;
+    }
+
+
+    customers.forEach(
+        function(customer) {
+
+            const option =
+                document.createElement("option");
+
+            option.value =
+                customer.id;
+
+            option.textContent =
+                customer.name ||
+                customer.fullName ||
+                "Unnamed Customer";
+
+            taskCustomer.appendChild(option);
+
+        }
+    );
+
 }
 
 
@@ -322,48 +407,34 @@ async function loadTasks() {
             );
 
 
-        // Session expired
-        if (response.status === 401) {
-
-            alert(
-                "Your login session has expired. Please login again."
-            );
-
-            logoutUser();
-
+        if (handleAuthError(response)) {
             return;
         }
 
 
         if (!response.ok) {
 
-            let errorMessage =
+            let message =
                 "Could not load tasks.";
 
             try {
 
-                const errorResult =
+                const result =
                     await response.json();
 
-                errorMessage =
-                    errorResult.message ||
-                    errorMessage;
+                message =
+                    result.message ||
+                    message;
 
-            } catch (error) {
-                // Ignore invalid JSON
-            }
+            } catch (error) {}
 
-            throw new Error(errorMessage);
+            throw new Error(message);
         }
 
 
         const result =
             await response.json();
 
-
-        // Support both:
-        // [tasks]
-        // { tasks: [...] }
 
         if (Array.isArray(result)) {
 
@@ -374,8 +445,7 @@ async function loadTasks() {
             Array.isArray(result.tasks)
         ) {
 
-            tasks =
-                result.tasks;
+            tasks = result.tasks;
 
         } else {
 
@@ -441,14 +511,17 @@ function displayTasks(list = tasks) {
 
 
     list.forEach(
-        function (task) {
+        function(task) {
 
             const customer =
                 customers.find(
-                    function (item) {
+                    function(item) {
 
                         return String(item.id) ===
-                            String(task.customerId);
+                            String(
+                                task.customerId ||
+                                task.customer_id
+                            );
 
                     }
                 );
@@ -456,7 +529,11 @@ function displayTasks(list = tasks) {
 
             const customerName =
                 customer
-                    ? customer.name
+                    ? (
+                        customer.name ||
+                        customer.fullName ||
+                        "Unnamed Customer"
+                    )
                     : "Unknown Customer";
 
 
@@ -525,6 +602,7 @@ function displayTasks(list = tasks) {
 
         }
     );
+
 }
 
 
@@ -554,7 +632,7 @@ if (addTaskButton) {
 
     addTaskButton.addEventListener(
         "click",
-        async function () {
+        async function() {
 
             if (taskForm) {
                 taskForm.reset();
@@ -614,10 +692,6 @@ function closeTaskModal() {
 
     }
 
-    if (taskForm) {
-        taskForm.reset();
-    }
-
 }
 
 
@@ -635,11 +709,9 @@ if (taskModal) {
 
     taskModal.addEventListener(
         "click",
-        function (event) {
+        function(event) {
 
-            if (
-                event.target === taskModal
-            ) {
+            if (event.target === taskModal) {
 
                 closeTaskModal();
 
@@ -659,40 +731,28 @@ if (taskForm) {
 
     taskForm.addEventListener(
         "submit",
-        async function (event) {
+        async function(event) {
 
             event.preventDefault();
 
 
             const titleElement =
-                document.getElementById(
-                    "taskTitle"
-                );
+                document.getElementById("taskTitle");
 
             const customerElement =
-                document.getElementById(
-                    "taskCustomer"
-                );
+                document.getElementById("taskCustomer");
 
             const dueDateElement =
-                document.getElementById(
-                    "taskDueDate"
-                );
+                document.getElementById("taskDueDate");
 
             const priorityElement =
-                document.getElementById(
-                    "taskPriority"
-                );
+                document.getElementById("taskPriority");
 
             const statusElement =
-                document.getElementById(
-                    "taskStatus"
-                );
+                document.getElementById("taskStatus");
 
             const descriptionElement =
-                document.getElementById(
-                    "taskDescription"
-                );
+                document.getElementById("taskDescription");
 
 
             if (
@@ -745,6 +805,43 @@ if (taskForm) {
             }
 
 
+            const selectedCustomer =
+                customers.find(
+                    function(customer) {
+
+                        return String(customer.id) ===
+                            String(customerId);
+
+                    }
+                );
+
+
+            if (!selectedCustomer) {
+
+                alert(
+                    "Please select a valid customer."
+                );
+
+                return;
+            }
+
+
+            const saveButton =
+                taskForm.querySelector(
+                    'button[type="submit"]'
+                );
+
+
+            if (saveButton) {
+
+                saveButton.disabled = true;
+
+                saveButton.textContent =
+                    "Saving...";
+
+            }
+
+
             try {
 
                 const response =
@@ -758,7 +855,6 @@ if (taskForm) {
 
                             body:
                                 JSON.stringify({
-
                                     title:
                                         title,
 
@@ -776,20 +872,12 @@ if (taskForm) {
 
                                     description:
                                         description
-
                                 })
                         }
                     );
 
 
-                if (response.status === 401) {
-
-                    alert(
-                        "Your login session has expired. Please login again."
-                    );
-
-                    logoutUser();
-
+                if (handleAuthError(response)) {
                     return;
                 }
 
@@ -802,11 +890,18 @@ if (taskForm) {
                         await response.json();
 
                 } catch (error) {
-                    // Ignore invalid JSON
+
+                    result = {};
+
                 }
 
 
                 if (!response.ok) {
+
+                    console.error(
+                        "SAVE TASK API ERROR:",
+                        result
+                    );
 
                     alert(
                         result.message ||
@@ -827,6 +922,7 @@ if (taskForm) {
 
                 await loadTasks();
 
+
             } catch (error) {
 
                 console.error(
@@ -837,6 +933,71 @@ if (taskForm) {
                 alert(
                     "Could not connect to the CRM backend."
                 );
+
+            } finally {
+
+                if (saveButton) {
+
+                    saveButton.disabled = false;
+
+                    saveButton.textContent =
+                        "Save Task";
+
+                }
+
+            }
+
+        }
+    );
+
+}
+
+
+// ========================================
+// TASK BUTTON ACTIONS
+// ========================================
+
+if (taskTableBody) {
+
+    taskTableBody.addEventListener(
+        "click",
+        function(event) {
+
+            const button =
+                event.target.closest("button");
+
+            if (!button) {
+                return;
+            }
+
+
+            const action =
+                button.getAttribute(
+                    "data-action"
+                );
+
+
+            const id =
+                button.getAttribute(
+                    "data-id"
+                );
+
+
+            if (!id) {
+                return;
+            }
+
+
+            if (action === "complete") {
+
+                completeTask(id);
+
+            }
+
+
+            if (action === "delete") {
+
+                deleteTask(id);
 
             }
 
@@ -876,14 +1037,7 @@ async function completeTask(id) {
             );
 
 
-        if (response.status === 401) {
-
-            alert(
-                "Your login session has expired. Please login again."
-            );
-
-            logoutUser();
-
+        if (handleAuthError(response)) {
             return;
         }
 
@@ -895,16 +1049,12 @@ async function completeTask(id) {
             try {
                 result =
                     await response.json();
-            } catch (error) {
-                // Ignore invalid JSON
-            }
+            } catch (error) {}
 
-            alert(
+            throw new Error(
                 result.message ||
                 "Could not complete task."
             );
-
-            return;
         }
 
 
@@ -919,7 +1069,8 @@ async function completeTask(id) {
         );
 
         alert(
-            "Could not connect to the CRM backend."
+            error.message ||
+            "Could not complete task."
         );
 
     }
@@ -955,14 +1106,7 @@ async function deleteTask(id) {
             );
 
 
-        if (response.status === 401) {
-
-            alert(
-                "Your login session has expired. Please login again."
-            );
-
-            logoutUser();
-
+        if (handleAuthError(response)) {
             return;
         }
 
@@ -974,22 +1118,13 @@ async function deleteTask(id) {
             try {
                 result =
                     await response.json();
-            } catch (error) {
-                // Ignore invalid JSON
-            }
+            } catch (error) {}
 
-            alert(
+            throw new Error(
                 result.message ||
                 "Could not delete task."
             );
-
-            return;
         }
-
-
-        alert(
-            "Task deleted successfully."
-        );
 
 
         await loadTasks();
@@ -1003,61 +1138,11 @@ async function deleteTask(id) {
         );
 
         alert(
-            "Could not connect to the CRM backend."
+            error.message ||
+            "Could not delete task."
         );
 
     }
-
-}
-
-
-// ========================================
-// TABLE ACTIONS
-// ========================================
-
-if (taskTableBody) {
-
-    taskTableBody.addEventListener(
-        "click",
-        function (event) {
-
-            const button =
-                event.target.closest("button");
-
-            if (!button) {
-                return;
-            }
-
-
-            const id =
-                button.getAttribute("data-id");
-
-            const action =
-                button.getAttribute(
-                    "data-action"
-                );
-
-
-            if (!id) {
-                return;
-            }
-
-
-            if (action === "complete") {
-
-                completeTask(id);
-
-            }
-
-
-            if (action === "delete") {
-
-                deleteTask(id);
-
-            }
-
-        }
-    );
 
 }
 
@@ -1068,15 +1153,12 @@ if (taskTableBody) {
 
 function filterTasks() {
 
-    if (!searchTask) {
-        return;
-    }
-
-
     const search =
-        searchTask.value
-            .toLowerCase()
-            .trim();
+        searchTask
+            ? searchTask.value
+                .toLowerCase()
+                .trim()
+            : "";
 
 
     const status =
@@ -1093,14 +1175,17 @@ function filterTasks() {
 
     const filtered =
         tasks.filter(
-            function (task) {
+            function(task) {
 
                 const customer =
                     customers.find(
-                        function (item) {
+                        function(item) {
 
                             return String(item.id) ===
-                                String(task.customerId);
+                                String(
+                                    task.customerId ||
+                                    task.customer_id
+                                );
 
                         }
                     );
@@ -1108,8 +1193,11 @@ function filterTasks() {
 
                 const customerName =
                     customer
-                        ? String(customer.name || "")
-                            .toLowerCase()
+                        ? String(
+                            customer.name ||
+                            customer.fullName ||
+                            ""
+                        ).toLowerCase()
                         : "";
 
 
@@ -1180,54 +1268,6 @@ if (filterPriority) {
     filterPriority.addEventListener(
         "change",
         filterTasks
-    );
-
-}
-
-
-// ========================================
-// LOGOUT
-// ========================================
-
-if (logoutButton) {
-
-    logoutButton.addEventListener(
-        "click",
-        async function () {
-
-            const token =
-                getToken();
-
-
-            try {
-
-                if (token) {
-
-                    await fetch(
-                        `${API_URL}/logout`,
-                        {
-                            method: "POST",
-
-                            headers:
-                                getAuthHeaders()
-                        }
-                    );
-
-                }
-
-            } catch (error) {
-
-                console.error(
-                    "LOGOUT ERROR:",
-                    error
-                );
-
-            }
-
-
-            logoutUser();
-
-        }
     );
 
 }
